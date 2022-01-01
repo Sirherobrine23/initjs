@@ -1,3 +1,8 @@
+FROM golang:latest AS gdrive
+WORKDIR /app
+RUN git clone --recursive https://github.com/prasmussen/gdrive.git gdrive
+RUN go get github.com/prasmussen/gdrive && echo $GOPATH/bin/gdrive
+
 FROM ubuntu:latest
 RUN apt update && apt install -y curl wget git zsh
 
@@ -27,3 +32,6 @@ RUN VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | gre
   wget "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_linux_${ghcli_arch}.deb" -O /tmp/gh_cli.deb && \
   dpkg -i /tmp/gh_cli.deb && \
   rm /tmp/gh_cli.deb
+
+# Install gdrive
+COPY --from=gdrive /go/bin/gdrive /usr/local/bin/gdrive
