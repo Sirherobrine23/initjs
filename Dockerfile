@@ -1,37 +1,59 @@
-FROM golang:latest AS gdrive
-WORKDIR /app
-RUN git clone --recursive https://github.com/prasmussen/gdrive.git gdrive
-RUN go get github.com/prasmussen/gdrive && echo $GOPATH/bin/gdrive
+FROM debian:latest
 
-FROM ubuntu:latest
-RUN apt update && apt install -y curl wget git zsh
+# Install Basic packages
+ARG DEBIAN_FRONTEND="noninteractive"
+RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release && \
+  wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash
 
-# Install Docker and Docker Compose
-RUN curl https://get.docker.com | sh && \
-  VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4) && \
-  wget "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-linux-$(uname -m)" -O /usr/local/bin/docker-compose && \
-  chmod +x /usr/local/bin/docker-compose
+# Install Docker, Docker Compose and minikube and kubectl
+VOLUME [ "/var/lib/docker" ]
+RUN wget -qO- https://get.docker.com | sh && \
+  wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1)\
+  -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
+  curl -Lo minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-$(dpkg --print-architecture)" && \
+  chmod +x minikube && mv minikube /usr/bin && \
+  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/$(dpkg --print-architecture)/kubectl" && \
+  chmod +x kubectl && mv kubectl /usr/bin
 
-ENV \
-  DOCKER_HOST=tcp://docker.sirherobrine23.org:2375 \
-  DOCKER_TLS_VERIFY=1 \
-  DOCKER_CERT_PATH=/DockerCert
+# Create docker and minikube start script
+ARG MINIKUBE_ARGS="--driver=docker"
+ARG DOCKERD_ARGS="--experimental"
+RUN (echo '#''!/bin/bash';\
+echo 'EXISTDOCKER="1"';\
+echo "if command -v dockerd &> /dev/null; then";\
+echo '  if ! [[ -f "/var/run/docker.sock" ]];then';\
+echo "    (sudo dockerd ${DOCKERD_ARGS}) &";\
+echo "    (minikube start ${MINIKUBE_ARGS}) &";\
+echo "    sleep 5s";\
+echo "  fi";\
+echo "else";\
+echo '  EXISTDOCKER="0"';\
+echo '  echo "o Docker não está instalado!"';\
+echo "fi";\
+echo "";\
+echo "# Run script";\
+echo 'if ! [[ -z "\$@" ]]; then';\
+echo '  sh -c "\$@"';\
+echo "fi";\
+echo "";\
+echo "# Sleep script";\
+echo "sleep infinity";\
+echo "exit") | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
 
-# Install ZSH and oh-my-zsh
-RUN yes | sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
+# Add non root user
+ARG USERNAME="devcontainer"
+ARG USER_UID="1000"
+ARG USER_GID=$USER_UID
+RUN groupadd --gid $USER_GID $USERNAME && adduser --disabled-password --gecos "" --shell /usr/bin/zsh --uid $USER_UID --gid $USER_GID $USERNAME && usermod -aG sudo $USERNAME && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && chmod 0440 /etc/sudoers.d/$USERNAME && usermod -aG docker $USERNAME
+USER $USERNAME
+WORKDIR /home/$USERNAME
+
+# Install oh my zsh
+RUN yes | sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)" && \
   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
   git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions && \
-  sed -e 's/ZSH_THEME=".*"/ZSH_THEME="strug"/g' -i ~/.zshrc && \
-  sed -e 's/plugins=(.*)/plugins=(git docker zsh-syntax-highlighting zsh-autosuggestions)/g' -i ~/.zshrc && \
-  usermod -s $(command -v zsh) root
-CMD ["/usr/bin/zsh"]
+  sed -e 's|ZSH_THEME=".*"|ZSH_THEME="strug"|g' -i ~/.zshrc && \
+  sed -e 's|plugins=(.*)|plugins=(git docker kubectl zsh-syntax-highlighting zsh-autosuggestions)|g' -i ~/.zshrc
 
-# Install Github CLI
-ARG ghcli_arch="amd64"
-RUN VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep tag_name | cut -d '"' -f 4 | cut -d 'v' -f 2) && \
-  wget "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_linux_${ghcli_arch}.deb" -O /tmp/gh_cli.deb && \
-  dpkg -i /tmp/gh_cli.deb && \
-  rm /tmp/gh_cli.deb
-
-# Install gdrive
-COPY --from=gdrive /go/bin/gdrive /usr/local/bin/gdrive
+# Start Script
+ENTRYPOINT [ "/usr/local/bin/start.sh" ]
