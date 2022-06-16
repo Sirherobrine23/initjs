@@ -2,8 +2,8 @@
 
 ## Build
 
-Run: `docker build -t ubuntu_sirherobrine23 .`
+Run: `docker build -t sirherobrine23_image .`
 
 ## Start
 
-Run: `docker run --rm --tty --interactive --workdir /root -v /home:/home -v /:/root_disk -v /var/lib/docker:/docker_data -v /root/DockerCert:/DockerCert:ro --privileged ubuntu_sirherobrine23`
+Run: `docker run --rm --privileged sirherobrine23_image`
