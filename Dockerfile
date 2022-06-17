@@ -10,7 +10,7 @@ ARG DEBIAN_FRONTEND="noninteractive"
 # Install Basic packages, Docker, Docker Compose, minikube, kubectl, act, dive and gh ...
 COPY --from=0 /dive.bin /usr/local/bin/dive
 VOLUME [ "/var/lib/docker" ]
-RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release && \
+RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg software-properties-common && \
   curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
   apt update && sudo apt install -y terraform && \
