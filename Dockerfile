@@ -11,10 +11,12 @@ ARG DEBIAN_FRONTEND="noninteractive"
 COPY --from=0 /dive.bin /usr/local/bin/dive
 VOLUME [ "/var/lib/docker" ]
 RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release && \
+  curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
+  apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
+  apt update && sudo apt install -y terraform && \
   wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash && \
   wget -qO- https://get.docker.com | sh && \
-  wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1)\
-  -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
+  wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1) -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
   # Minikube
   curl -Lo minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-$(dpkg --print-architecture)" && \
   chmod +x minikube && mv minikube /usr/bin && \
