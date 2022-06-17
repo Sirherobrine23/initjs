@@ -11,7 +11,7 @@ ARG DEBIAN_FRONTEND="noninteractive"
 COPY --from=0 /dive.bin /usr/local/bin/dive
 VOLUME [ "/var/lib/docker" ]
 RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg software-properties-common && \
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
+  wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
   apt update && sudo apt install -y terraform && \
   wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash && \
