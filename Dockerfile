@@ -4,13 +4,19 @@ WORKDIR /build
 RUN git clone https://github.com/wagoodman/dive --depth=1 dive && \
 cd dive && go build -o /dive.bin .
 
+# Build (PHP) compose
+FROM php
+WORKDIR /build
+RUN curl -sS https://getcomposer.org/installer | php
+
 # Final Image
 FROM debian:latest
 ARG DEBIAN_FRONTEND="noninteractive"
 # Install Basic packages, Docker, Docker Compose, minikube, kubectl, act, dive and gh ...
 COPY --from=0 /dive.bin /usr/local/bin/dive
+COPY --from=1 /build/composer.phar /usr/share/composer/composer.phar
 VOLUME [ "/var/lib/docker" ]
-RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg software-properties-common && \
+RUN apt update && apt install -y software-properties-common git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg php && \
   wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
   apt update && sudo apt install -y terraform && \
@@ -28,7 +34,9 @@ RUN apt update && apt install -y git curl wget sudo procps zsh tar screen ca-cer
   # dive (https://github.com/wagoodman/dive)
   chmod a+x /usr/local/bin/dive && \
   # Install Github CLI (gh)
-  (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
+  (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh" && \
+  # Create alias shell to php composer
+  echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
 
 # Create docker and minikube start script
 ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
