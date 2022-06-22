@@ -51,11 +51,12 @@ RUN chmod a+x /usr/local/bin/start.sh
 ENTRYPOINT [ "/usr/local/bin/start.sh" ]
 
 # Install Github CLI (gh)
-RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh" && \
+RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
 
 # Go (golang)
-RUN cd /tmp && \
-  wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar xfz
+RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && \
+  ln -s /usr/local/go/bin/go /usr/bin/go && \
+  ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
 
 # Add non root user and Install oh my zsh
 # ARG USERNAME="devcontainer" USER_UID="1000" USER_GID=$USER_UID
