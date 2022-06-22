@@ -12,16 +12,26 @@ RUN curl -sS https://getcomposer.org/installer | php
 # Final Image
 FROM debian:latest
 ARG DEBIAN_FRONTEND="noninteractive"
-# Install Basic packages, Docker, Docker Compose, minikube, kubectl, act, dive and gh ...
-COPY --from=0 /dive.bin /usr/local/bin/dive
+# Install Basic packages
+RUN apt update && apt install -y software-properties-common git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg
+
+# Nodejs
+RUN wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash
+
+# PHP and compose
 COPY --from=1 /build/composer.phar /usr/share/composer/composer.phar
-VOLUME [ "/var/lib/docker" ]
-RUN apt update && apt install -y software-properties-common git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg php && \
-  wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
+RUN apt update && apt install -y php && \
+  echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
+
+# Terraform
+RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
-  apt update && sudo apt install -y terraform && \
-  wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash && \
-  wget -qO- https://get.docker.com | sh && \
+  apt update && sudo apt install -y terraform
+
+# Docker, Docker Compose, minikube, kubectl, act, dive
+VOLUME [ "/var/lib/docker" ]
+COPY --from=0 /dive.bin /usr/local/bin/dive
+RUN wget -qO- https://get.docker.com | sh && \
   wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1) -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
   # Minikube
   curl -Lo minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-$(dpkg --print-architecture)" && \
@@ -32,17 +42,20 @@ RUN apt update && apt install -y software-properties-common git curl wget sudo p
   # act (https://github.com/nektos/act)
   wget -qO- https://raw.githubusercontent.com/nektos/act/master/install.sh | bash && \
   # dive (https://github.com/wagoodman/dive)
-  chmod a+x /usr/local/bin/dive && \
-  # Install Github CLI (gh)
-  (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh" && \
-  # Create alias shell to php composer
-  echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
+  chmod a+x /usr/local/bin/dive
 
 # Create docker and minikube start script
 ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
 COPY ./start.sh /usr/local/bin/start.sh
 RUN chmod a+x /usr/local/bin/start.sh
 ENTRYPOINT [ "/usr/local/bin/start.sh" ]
+
+# Install Github CLI (gh)
+RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh" && \
+
+# Go (golang)
+RUN cd /tmp && \
+  wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar xfz
 
 # Add non root user and Install oh my zsh
 # ARG USERNAME="devcontainer" USER_UID="1000" USER_GID=$USER_UID
