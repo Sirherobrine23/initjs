@@ -24,9 +24,9 @@ RUN apt update && apt install -y php && \
   echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
 
 # Terraform
-RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
-  apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
-  apt update && sudo apt install -y terraform
+# RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
+#   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
+#   apt update && sudo apt install -y terraform
 
 # Docker, Docker Compose, minikube, kubectl, act, dive
 VOLUME [ "/var/lib/docker" ]
