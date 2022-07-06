@@ -1,5 +1,7 @@
 name: Publish latest image
 on:
+  schedule:
+    - cron: 0 0 * * */2
   push:
     branches:
       - main
@@ -28,10 +30,9 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v3
         with:
-          context: .
-          push: true
           cache-from: type=gha,scope=${{ github.ref }}_sirherobrine23_docker
           cache-to: type=gha,mode=max,scope=${{ github.ref }}_sirherobrine23_docker
           platforms: "linux/amd64,linux/arm64"
-          tags: |
-            ghcr.io/sirherobrine23/mydockerimage:latest
+          context: ./
+          tags: ghcr.io/sirherobrine23/mydockerimage:latest
+          push: true
