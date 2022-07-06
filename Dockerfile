@@ -57,10 +57,7 @@ RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest |
 RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
 
 # Install httpie
-RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && \
-curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && \
-apt update && \
-apt install httpie
+RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && apt update && apt install -y httpie
 
 # Install node apps
 RUN npm i -g ts-node typescript autocannon
