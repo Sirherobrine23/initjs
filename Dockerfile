@@ -56,6 +56,15 @@ RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest |
 # Go (golang)
 RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
 
+# Install httpie
+RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && \
+curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && \
+apt update && \
+apt install httpie
+
+# Install node apps
+RUN npm i -g ts-node typescript autocannon
+
 # Add non root user and Install oh my zsh
 # ARG USERNAME="devcontainer" USER_UID="1000" USER_GID=$USER_UID
 # RUN groupadd --gid $USER_GID $USERNAME && adduser --disabled-password --gecos "" --shell /usr/bin/zsh --uid $USER_UID --gid $USER_GID $USERNAME && usermod -aG sudo $USERNAME && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && chmod 0440 /etc/sudoers.d/$USERNAME && usermod -aG docker $USERNAME
