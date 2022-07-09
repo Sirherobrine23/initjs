@@ -30,8 +30,8 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v3
         with:
-          cache-from: type=gha,scope=${{ github.ref }}_sirherobrine23_docker
-          cache-to: type=gha,mode=max,scope=${{ github.ref }}_sirherobrine23_docker
+          cache-from: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker' || '' }}
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker' || '' }}
           platforms: "linux/amd64,linux/arm64"
           context: ./
           tags: ghcr.io/sirherobrine23/mydockerimage:latest
