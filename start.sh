@@ -19,7 +19,8 @@ fi
 
 # Run script
 if ! [[ -z "\$@" ]]; then
-  sh -c "\$@"
+  set -ex
+  exec "\$@"
 fi
 
 # Sleep script
