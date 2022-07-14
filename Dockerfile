@@ -9,7 +9,7 @@ WORKDIR /build
 RUN curl -sS https://getcomposer.org/installer | php
 
 # Final Image
-FROM debian:sid
+FROM debian:latest
 # Install Basic packages
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG EXTRA_PACKAGE=""
