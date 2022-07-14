@@ -1,4 +1,5 @@
 #!/bin/bash
+CUSTOMRUN="$@"
 echo "dont start with root/sudo user!"
 # Start docker
 if command -v dockerd &> /dev/null; then
@@ -18,9 +19,9 @@ if [[ -d "/startScripts" ]];then
 fi
 
 # Run script
-if ! [[ -z "\$@" ]]; then
+if ! [[ -z "${CUSTOMRUN}" ]]; then
   set -ex
-  "\$@"
+  "${CUSTOMRUN}"
 fi
 
 # Sleep script
