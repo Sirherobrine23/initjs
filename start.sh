@@ -20,7 +20,7 @@ fi
 # Run script
 if ! [[ -z "\$@" ]]; then
   set -ex
-  exec "\$@"
+  "\$@"
 fi
 
 # Sleep script
