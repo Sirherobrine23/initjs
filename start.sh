@@ -21,7 +21,8 @@ fi
 # Run script
 if ! [[ -z "${CUSTOMRUN}" ]]; then
   set -ex
-  exec "${CUSTOMRUN}"
+  bash -c "${CUSTOMRUN}"
+  exit $?
 fi
 
 # Sleep script
