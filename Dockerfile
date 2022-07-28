@@ -9,10 +9,11 @@ WORKDIR /build
 RUN curl -sS https://getcomposer.org/installer | php
 
 # Final Image
-FROM debian:latest
+FROM ubuntu:latest
 # Install Basic packages
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG EXTRA_PACKAGE=""
+RUN apt update && apt list --upgradable -a && apt upgrade -y
 RUN apt update && apt install -y software-properties-common cmake make build-essential git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg $EXTRA_PACKAGE
 
 # Nodejs
@@ -58,6 +59,8 @@ RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar
 
 # Install httpie
 RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && apt update && apt install -y httpie
+
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++
 
 # Install node apps
 RUN npm i -g ts-node typescript autocannon
