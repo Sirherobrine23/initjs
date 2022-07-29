@@ -14,7 +14,7 @@ FROM ubuntu:latest
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG EXTRA_PACKAGE=""
 RUN apt update && apt list --upgradable -a && apt upgrade -y
-RUN apt update && apt install -y software-properties-common cmake make build-essential git curl wget sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg $EXTRA_PACKAGE
+RUN apt update && apt install -y software-properties-common cmake make build-essential git curl wget jq sudo procps zsh tar screen ca-certificates procps lsb-release gnupg gnupg2 gpg $EXTRA_PACKAGE
 
 # Nodejs
 RUN wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles/main/debianInstall.sh | bash
