@@ -9,7 +9,7 @@ WORKDIR /build
 RUN curl -sS https://getcomposer.org/installer | php
 
 # Final Image
-FROM ubuntu:latest
+FROM ubuntu:latest AS base_image
 # Install Basic packages
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG EXTRA_PACKAGE=""
@@ -23,13 +23,7 @@ RUN wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles
 COPY --from=1 /build/composer.phar /usr/share/composer/composer.phar
 RUN apt update && apt install -y php && echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
 
-# Terraform
-# RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/hashicorp.gpg  >/dev/null && \
-#   apt-add-repository "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
-#   apt update && sudo apt install -y terraform
-
 # Docker, Docker Compose, minikube, kubectl, act, dive
-VOLUME [ "/var/lib/docker" ]
 RUN wget -qO- https://get.docker.com | sh && \
   wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1) -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
   # Minikube
@@ -46,10 +40,8 @@ COPY --from=0 /dive.bin /usr/local/bin/dive
 RUN chmod a+x /usr/local/bin/dive
 
 # Create docker and minikube start script
-ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
 COPY ./start.sh /usr/local/bin/start.sh
 RUN chmod a+x /usr/local/bin/start.sh
-ENTRYPOINT [ "/usr/local/bin/start.sh" ]
 
 # Install Github CLI (gh)
 RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
@@ -60,6 +52,7 @@ RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar
 # Install httpie
 RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && apt update && apt install -y httpie
 
+# Install latest gcc
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++
 
 # Install node apps
@@ -75,3 +68,11 @@ RUN npm i -g ts-node typescript autocannon
 #   git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions && \
 #   sed -e 's|ZSH_THEME=".*"|ZSH_THEME="strug"|g' -i ~/.zshrc && \
 #   sed -e 's|plugins=(.*)|plugins=(git docker kubectl zsh-syntax-highlighting zsh-autosuggestions)|g' -i ~/.zshrc
+
+FROM scratch
+COPY --from=base_image / /
+VOLUME [ "/var/lib/docker" ]
+CMD [ "zsh" ]
+ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
+WORKDIR /root
+ENTRYPOINT [ "/usr/local/bin/start.sh" ]
