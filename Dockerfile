@@ -61,6 +61,10 @@ RUN npm i -g ts-node typescript autocannon
 # Install extra packages
 RUN apt update && apt install -y apt-file attr bash-completion bc bison clang command-not-found dialog dos2unix ed flex gawk gperf htop libresolv-wrapper lld llvm lsof man neofetch neovim rhash tree tshark unbound unzip xxhash openssh-server openssh-client
 
+# Use clang to C and C++
+RUN apt update && apt install -y lsb-release wget software-properties-common gnupg && bash -c "$( curl -SsL https://apt.llvm.org/llvm.sh)"
+ENV CC=/usr/bin/clang CPP=/usr/bin/clang-cpp CXX=/usr/bin/clang++ LD=/usr/bin/ld.lld
+
 # Add non root user and Install oh my zsh
 # ARG USERNAME="devcontainer" USER_UID="1000" USER_GID=$USER_UID
 # RUN groupadd --gid $USER_GID $USERNAME && adduser --disabled-password --gecos "" --shell /usr/bin/zsh --uid $USER_UID --gid $USER_GID $USERNAME && usermod -aG sudo $USERNAME && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && chmod 0440 /etc/sudoers.d/$USERNAME && usermod -aG docker $USERNAME
