@@ -56,7 +56,7 @@ RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && curl -Ss
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++
 
 # Install node apps
-RUN npm i -g ts-node typescript autocannon
+RUN npm i -g ts-node typescript autocannon pnpm
 
 # Install extra packages
 RUN apt update && apt install -y apt-file attr bash-completion bc bison clang command-not-found dialog dos2unix ed flex gawk gperf htop libresolv-wrapper lld llvm lsof man neofetch neovim rhash tree tshark unbound unzip xxhash openssh-server openssh-client
