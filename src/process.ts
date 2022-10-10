@@ -48,17 +48,17 @@ export function execFile(processConfig: optionsExecFile) {
   if (!processConfig.args) processConfig.args = [];
   if (!processConfig.options) processConfig.options = {};
   processConfig.options.env = {...process.env, ...(processConfig.options.env||{})}
-  const exec = child_process.spawn(processConfig.command, processConfig.args, processConfig.options);
-  if (processConfig.options.logPath) {
-    if (processConfig.options.logPath.stderr) exec.stderr.pipe(fs.createWriteStream(processConfig.options.logPath.stderr));
-    exec.stdout.pipe(fs.createWriteStream(processConfig.options.logPath.stdout));
-  }
+  const exec = child_process.execFile(processConfig.command, processConfig.args, processConfig.options);
   if (processConfig.options.stdio === "inherit") {
     exec.stdout.on("data", data => process.stdout.write(data));
     exec.stderr.on("data", data => process.stderr.write(data));
     process.stdin.pipe(exec.stdin);
     process.stdin.setMaxListeners(0);
     exec.on("close", () => process.stdin.unpipe(exec.stdin));
+  }
+  if (processConfig.options.logPath) {
+    if (processConfig.options.logPath.stderr) exec.stderr.pipe(fs.createWriteStream(processConfig.options.logPath.stderr));
+    exec.stdout.pipe(fs.createWriteStream(processConfig.options.logPath.stdout));
   }
   return exec;
 }

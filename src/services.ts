@@ -28,8 +28,8 @@ export type processConfig<moreOptions = any> = {
 
 export type servicesV1 = {
   name: string,
-  preProcess?: processConfig,
   process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number}>,
+  preProcess?: processConfig|processConfig[],
   restartProcess?: processConfig,
   onRestart?: processConfig
 };
@@ -60,17 +60,6 @@ export class serviceUnit {
     if (!await exists(logRoot)) await fs.mkdir(logRoot, {recursive: true});
     if (!this.logStdout) this.logStdout = createWriteStream(path.join(logRoot, "stdout.log"));
     if (!this.logStderr) this.logStderr = createWriteStream(path.join(logRoot, "stderr.log"));
-
-    if (this.config.preProcess) {
-      if (this.config.preProcess.args) await customProcess.execFileAsync(this.config.preProcess.command, this.config.preProcess.args, {cwd: this.config.preProcess.cwd, env: this.config.preProcess.env});
-      else await customProcess.execFileAsync(this.config.preProcess.command, {cwd: this.config.preProcess.cwd, env: this.config.preProcess.env});
-    }
-
-    // Update env
-    if (this.config.process.env) for (const key of Object.keys(this.config.process.env)) this.config.process.env[key] = replaceEnvCommand(this.config.process.env[key], this.config.process.env);
-    if (this.config.process.args) this.config.process.command = replaceEnvCommand(this.config.process.command, this.config.process.env);
-    if (this.config.process.args) for (const key in this.config.process.args) this.config.process.args[key] = replaceEnvCommand(this.config.process.args[key], this.config.process.env);
-
     this.processConfig = {
       command: this.config.process.command,
       args: this.config.process.args,
@@ -79,15 +68,30 @@ export class serviceUnit {
         env: this.config.process.env,
         maxBuffer: Infinity,
         uid: this.config.process.user?(typeof this.config.process.user === "string"?uid(this.config.process.user):this.config.process.user):0,
+        stdio: SHOW_PROCESS_LOG === "verbose"?"inherit":"ignore",
       }
     };
-    this.process = customProcess.execFile(this.processConfig);
 
-    // Write data to Log
+
+    // Update env
+    if (this.config.process.env) for (const key of Object.keys(this.config.process.env)) this.config.process.env[key] = replaceEnvCommand(this.config.process.env[key], this.config.process.env);
+    if (this.config.process.args) this.config.process.command = replaceEnvCommand(this.config.process.command, this.config.process.env);
+    if (this.config.process.args) for (const key in this.config.process.args) this.config.process.args[key] = replaceEnvCommand(this.config.process.args[key], this.config.process.env);
+
+    if (this.config.preProcess) {
+      if (!Array.isArray(this.config.preProcess)) this.config.preProcess = [this.config.preProcess];
+      for (const preProcess of this.config.preProcess) await customProcess.execFileAsync(replaceEnvCommand(preProcess.command, this.config.process.env), (preProcess.args||[]).map(key => replaceEnvCommand(key, this.config.process.env)), {
+        ...this.processConfig.options,
+        stdio: SHOW_PROCESS_LOG === "verbose"?"inherit":"ignore",
+        uid: 0,
+      });
+    }
+
+    // Main process
+    this.process = customProcess.execFile(this.processConfig);
     this.process.stdout.on("data", data => this.logStdout.write(data));
     this.process.stderr.on("data", data => this.logStderr.write(data));
-
-    this.process.on("close", async code => {
+    this.process.on("close", async (code, signal) => {
       if (this.config.process.more?.restartCount === 0|| this.countRestart++ < ((this.config.process.more?.restartCount||50))) {
         if (this.config.process.more?.restart === "always"||(this.config.process.more?.restart === "on-error" && code !== 0)) {
           await this.restartProcess();
@@ -95,7 +99,9 @@ export class serviceUnit {
         }
       }
       delete processSessions[this.config.name];
-      console.log("Process '%s' no restart", this.config.name);
+      console.log("Process '%s' no restart, exit code/signal %o", this.config.name, signal||code);
+      this.logStdout.close();
+      this.logStderr.close();
     });
     console.info("Process '%s' started", this.config.name);
     return fs.writeFile(path.join(logRoot, "exec.json"), JSON.stringify(this.processConfig, null, 2));
