@@ -78,6 +78,7 @@ RUN npm i -g ts-node typescript autocannon pnpm
 # Create docker and minikube start script
 WORKDIR /usr/local/initd
 COPY ./ ./
+RUN chmod a+x ./start.sh && ln -s /usr/local/initd/start.sh /usr/local/bin/start.sh
 
 VOLUME [ "/var/lib/docker" ]
 CMD [ "zsh" ]
