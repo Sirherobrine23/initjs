@@ -5,7 +5,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { uid } from "userid";
 
-const servicesStorages = {default: path.join(process.cwd(), "dinit"), fist: "/etc/dinit", second: "/var/lib/dinit"};
+const servicesStorages = {default: path.join(process.cwd(), "dinit"), fist: "/etc/dinit", second: "/var/lib/dinit", three: path.join(__dirname, "../dinit")};
 export const SHOW_PROCESS_LOG: "verbose"|"quiet" = (["verbose", "quiet"]).find(type => type === process.env.INITD_LOG) as "verbose"|"quiet"||"quiet";
 export const processSessions: {[keyName: string]: serviceUnit} = {};
 export const regexValid = /\.((c|m|)js|json)$/;
@@ -120,5 +120,6 @@ export async function startAllServices(){
   if (await extendsFs.exists(servicesStorages.default)) scripts.push(servicesStorages.default);
   if (await extendsFs.exists(servicesStorages.fist)) scripts.push(servicesStorages.fist);
   if (await extendsFs.exists(servicesStorages.second)) scripts.push(servicesStorages.second);
+  if (await extendsFs.exists(servicesStorages.three)) scripts.push(servicesStorages.three);
   return Promise.all((await extendsFs.readdirrecursive(scripts)).filter(file => file.endsWith(".json")).map(async fileConfig => new serviceUnit(JSON.parse(await fs.readFile(fileConfig, "utf8")))));
 }

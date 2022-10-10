@@ -1,14 +1,14 @@
 {
   "name": "Sirherobrine23 Devcontainer",
   "updateRemoteUserUID": false,
-  "containerUser": "devop",
-  "remoteUser": "devop",
+  "containerUser": "devcontainer",
+  "remoteUser": "devcontainer",
   "overrideCommand": false,
   "postCreateCommand": "npm install",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "USERNAME": "devop",
+      "USERNAME": "devcontainer",
       "USER_UID": "1000"
     }
   },
