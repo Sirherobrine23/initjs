@@ -1,0 +1,13 @@
+{
+  "name": "Docker daemon",
+  "process": {
+    "restart": "always",
+    "command": "dockerd",
+    "args": [
+      "--experimental"
+    ],
+    "more": {
+      "restartCount": 3
+    }
+  }
+}

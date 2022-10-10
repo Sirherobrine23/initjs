@@ -1,6 +1,8 @@
 import child_process from "node:child_process";
 import fs, { ObjectEncodingOptions } from "node:fs";
+export type { ChildProcess } from "node:child_process";
 export default {spawn, exec, execAsync, execFile, execFileAsync};
+
 export type logFile = {
   logPath?: {
     stdout: string,

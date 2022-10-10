@@ -1,0 +1,35 @@
+{
+  "name": "Grafana",
+  "process": {
+    "restart": "always",
+    "user": "grafana",
+    "cwd": "/usr/share/grafana",
+    "command": "grafana-server",
+    "args": [
+      "--pidfile=${PID_FILE}",
+      "--config=${CONF_FILE}",
+      "--packaging=deb cfg:default.paths.provisioning=$PROVISIONING_CFG_DIR cfg:default.paths.data=${DATA_DIR} cfg:default.paths.logs=${LOG_DIR} cfg:default.paths.plugins=${PLUGINS_DIR}"
+    ],
+    "more": {
+      "restartCount": 3
+    },
+    "env": {
+      "GRAFANA_HOME": "/usr/share/grafana",
+      "CONF_DIR": "/etc/grafana",
+      "NAME": "grafana-server",
+      "DESC": "Grafana Server",
+      "GRAFANA_USER": "grafana",
+      "GRAFANA_GROUP": "grafana",
+      "DATA_DIR": "/var/lib/grafana",
+      "PLUGINS_DIR": "/var/lib/grafana/plugins",
+      "LOG_DIR": "/var/log/grafana",
+      "MAX_OPEN_FILES": "10000",
+      "DEFAULT": "/etc/default/$NAME",
+      "WORK_DIR": "$GRAFANA_HOME",
+      "CONF_FILE": "$CONF_DIR/grafana.ini",
+      "PROVISIONING_CFG_DIR": "$CONF_DIR/provisioning",
+      "PID_FILE": "/var/run/$NAME.pid",
+      "DAEMON": "/usr/sbin/$NAME"
+    }
+  }
+}
