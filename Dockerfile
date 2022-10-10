@@ -26,6 +26,13 @@ RUN apt install -y apt-transport-https && \
   echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://packages.grafana.com/enterprise/deb stable main" | tee -a /etc/apt/sources.list.d/grafana.list && \
   apt update && apt install -y grafana
 
+# Install Prometheus
+RUN mkdir /var/lib/prometheus && for i in rules rules.d files_sd; do mkdir -vp /etc/prometheus/${i}; done && \
+  cd /tmp && mkdir prometheus && cd prometheus && \
+  curl -s https://api.github.com/repos/prometheus/prometheus/releases/latest | grep browser_download_url | grep linux-$(dpkg --print-architecture) | cut -d '"' -f 4 | wget -O- -qi - | tar -xzvf - && \
+  cd prometheus*/ && mv prometheus promtool /usr/local/bin/ && mv prometheus.yml /etc/prometheus/prometheus.yml && mv consoles/ console_libraries/ /etc/prometheus/ && \
+  rm -rf /tmp/*
+
 # PHP and compose
 COPY --from=1 /build/composer.phar /usr/share/composer/composer.phar
 RUN apt update && apt install -y php && echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
@@ -46,47 +53,34 @@ RUN wget -qO- https://get.docker.com | sh && \
 COPY --from=0 /dive.bin /usr/local/bin/dive
 RUN chmod a+x /usr/local/bin/dive
 
-# Create docker and minikube start script
-COPY ./start.sh /usr/local/bin/start.sh
-RUN chmod a+x /usr/local/bin/start.sh
-
 # Install Github CLI (gh)
 RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
 
 # Go (golang)
-RUN wget -qO- "https://go.dev/dl/go1.18.3.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
+RUN wget -qO- "https://go.dev/dl/go1.19.2.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
 
 # Install httpie
-RUN curl -SsL https://packages.httpie.io/deb/KEY.gpg | apt-key add - && curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list && apt update && apt install -y httpie
-
-# Install latest gcc
-RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++
-
-# Install node apps
-RUN npm i -g ts-node typescript autocannon pnpm
+RUN apt install -y python3-pip && pip install --upgrade pip wheel && pip install --upgrade httpie
 
 # Install extra packages
 RUN apt update && apt install -y apt-file attr bash-completion bc bison clang command-not-found dialog dos2unix ed flex gawk gperf htop libresolv-wrapper lld llvm lsof man neofetch neovim rhash tree tshark unbound unzip xxhash openssh-server openssh-client
 
+# Install latest gcc
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++
+
 # Use clang to C and C++
-RUN apt update && apt install -y lsb-release wget software-properties-common gnupg && bash -c "$( curl -SsL https://apt.llvm.org/llvm.sh)"
+RUN apt update && apt install -y lsb-release wget software-properties-common gnupg && bash -c "$(curl -SsL https://apt.llvm.org/llvm.sh)"
 ENV CC=/usr/bin/clang CPP=/usr/bin/clang-cpp CXX=/usr/bin/clang++ LD=/usr/bin/ld.lld
 
-# Add non root user and Install oh my zsh
-# ARG USERNAME="devcontainer" USER_UID="1000" USER_GID=$USER_UID
-# RUN groupadd --gid $USER_GID $USERNAME && adduser --disabled-password --gecos "" --shell /usr/bin/zsh --uid $USER_UID --gid $USER_GID $USERNAME && usermod -aG sudo $USERNAME && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && chmod 0440 /etc/sudoers.d/$USERNAME && usermod -aG docker $USERNAME
-# USER $USERNAME
-# WORKDIR /home/$USERNAME
-# RUN yes | sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)" && \
-#   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
-#   git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions && \
-#   sed -e 's|ZSH_THEME=".*"|ZSH_THEME="strug"|g' -i ~/.zshrc && \
-#   sed -e 's|plugins=(.*)|plugins=(git docker kubectl zsh-syntax-highlighting zsh-autosuggestions)|g' -i ~/.zshrc
+# Install node apps
+RUN npm i -g ts-node typescript autocannon pnpm
 
-FROM scratch
-COPY --from=base_image / /
+# Create docker and minikube start script
+WORKDIR /usr/local/initd
+COPY ./ ./
+
 VOLUME [ "/var/lib/docker" ]
 CMD [ "zsh" ]
 ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
 WORKDIR /root
-ENTRYPOINT [ "/usr/local/bin/start.sh" ]
+ENTRYPOINT [ "bash", "/usr/local/initd/start.sh" ]
