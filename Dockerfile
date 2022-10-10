@@ -77,10 +77,13 @@ RUN npm i -g ts-node typescript autocannon pnpm
 
 # Create docker and minikube start script
 WORKDIR /usr/local/initd
+COPY ./package*.json ./
+RUN npm install --no-save
 COPY ./ ./
+# RUN npm run build
 
 VOLUME [ "/var/lib/docker" ]
 CMD [ "zsh" ]
 ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental"
 WORKDIR /root
-ENTRYPOINT [ "bash", "/usr/local/initd/start.sh" ]
+ENTRYPOINT [ "ts-node", "/usr/local/initd/src/index.ts" ]

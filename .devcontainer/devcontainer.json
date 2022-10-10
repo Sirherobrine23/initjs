@@ -1,0 +1,42 @@
+{
+  "name": "Sirherobrine23 Devcontainer",
+  "updateRemoteUserUID": false,
+  "containerUser": "devop",
+  "remoteUser": "devop",
+  "overrideCommand": false,
+  "postCreateCommand": "npm install",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "USERNAME": "devop",
+      "USER_UID": "1000"
+    }
+  },
+  "runArgs": [
+    "--init",
+    "--privileged"
+  ],
+  "mounts": [
+    "target=/var/lib/docker,type=volume,source=devcontainersh23"
+  ],
+  "extensions": [
+		"benshabatnoam.google-translate-ext",
+		"eamodio.gitlens",
+		"github.vscode-pull-request-github",
+		"visualstudioexptteam.vscodeintellicode",
+		"redhat.vscode-yaml",
+		"ms-vscode-remote.remote-containers",
+		"vscode-icons-team.vscode-icons",
+		"me-dutour-mathieu.vscode-github-actions",
+		"cschleiden.vscode-github-actions",
+		"oderwat.indent-rainbow",
+		"ms-azuretools.vscode-docker"
+	],
+	"settings": {
+    "editor.tabSize": 2,
+    "editor.minimap.enabled": false,
+    "files.eol": "\n",
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true
+  }
+}
