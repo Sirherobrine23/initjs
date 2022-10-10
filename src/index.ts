@@ -7,6 +7,11 @@ process.title = "Initd nodejs";
 
 const startScripts = "/startScripts";
 const varLog = "/var/log";
+const servicesStorages = {
+  default: "./dinit",
+  fist: "/etc/dinit",
+  second: "/var/lib/dinit"
+};
 
 (async function rootScript(){
   if (await extendsFs.exists(startScripts)) {
@@ -23,6 +28,16 @@ const varLog = "/var/log";
       });
     });
   }
+})();
+
+(async function startServices(){
+  const scripts = [];
+  if (await extendsFs.exists(servicesStorages.default)) scripts.push(servicesStorages.default);
+  if (await extendsFs.exists(servicesStorages.fist)) scripts.push(servicesStorages.fist);
+  if (await extendsFs.exists(servicesStorages.second)) scripts.push(servicesStorages.second);
+
+  const files = (await extendsFs.readdirrecursive(scripts)).filter(file => /\.((c|m|)js|json)$/.test(file));
+  console.log(files);
 })();
 
 // Start user command
