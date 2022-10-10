@@ -86,4 +86,4 @@ VOLUME [ "/var/lib/docker" ]
 CMD [ "zsh" ]
 ENV MINIKUBE_ARGS="--driver=docker" DOCKERD_ARGS="--experimental" INITD_LOG="verbose"
 WORKDIR /root
-ENTRYPOINT [ "ts-node", "/usr/local/initd/src/index.ts" ]
+ENTRYPOINT [ "sudo", "ts-node", "/usr/local/initd/src/index.ts" ]
