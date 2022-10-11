@@ -16,7 +16,7 @@ if ((["on", "1", "true"]).includes(process.env.INITD_NO_EXIT)) {
     if (Object.keys(processSessions).length > 0) return;
     return console.info("No process to run");
   }, 1000);
-  process.once("exit", () => clearInterval(setInterval));
+  process.once("exit", () => clearInterval(verifyInterval));
 }
 
 export type processConfig<moreOptions = any> = {
@@ -73,9 +73,9 @@ export class serviceUnit {
 
   #delete(status: any) {
     delete processSessions[this.config.name];
-    console.log("Process '%s' no restart, exit code/signal %o", this.config.name, status);
-    this.logStdout.close();
-    this.logStderr.close();
+    console.log("Process '%s' no restart, exit code/signal/Error: %o", this.config.name, status);
+    if (this.logStdout) this.logStdout.close();
+    if (this.logStderr) this.logStderr.close();
   }
 
   async startProcess(){
@@ -119,8 +119,8 @@ export class serviceUnit {
         if (this.config.process.more?.restartCount) {
           if (this.countRestart++ < (this.config.process.more?.restartCount)) return this.#delete(signal||code);
         }
-        await this.restartProcess();
-        return this.startProcess();
+        await this.restartProcess().catch(err => this.#delete(err));
+        return this.startProcess().catch(err => this.#delete(err));
       }
       return this.#delete(signal||code);
     });
@@ -132,7 +132,7 @@ export class serviceUnit {
     this.config = unit;
     processSessions[unit.name] = this;
     if (unit.dependecies) for (const dependecie of unit.dependecies) this.subProcess.push(new serviceUnit(dependecie));
-    this.startProcess();
+    this.startProcess().catch(err => this.#delete(err));
   }
 }
 

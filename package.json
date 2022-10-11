@@ -6,6 +6,10 @@
   "scripts": {
     "build": "tsc"
   },
+  "bin": {
+    "initjs": "./src/index.js",
+    "initd": "./src/index.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Sirherobrine23/My-docker-image-to-develop.git"

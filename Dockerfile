@@ -72,10 +72,9 @@ RUN pip install --upgrade pip wheel && pip install --upgrade httpie
 WORKDIR /usr/local/initd
 COPY ./package*.json ./
 RUN npm install --no-save
-COPY ./ ./
-RUN npm run build
-
 ENV INITD_LOG="verbose" INITD_NO_EXIT="1"
-WORKDIR /root
-ENTRYPOINT [ "sudo", "-E", "node", "/usr/local/initd/src/index.js" ]
+ENTRYPOINT [ "sudo", "-E", "initjs" ]
 CMD [ "zsh" ]
+COPY ./ ./
+RUN npm run build && npm link && (echo '#''!/bin/bash'; echo 'set -ex';echo 'echo "Now use sudo -E node /usr/local/initd/src/index.js" or sudo -E initjs'; echo "sudo -E INITD_NO_EXIT=\"1\" initjs" '"$@"') | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
+WORKDIR /root
