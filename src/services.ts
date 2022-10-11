@@ -9,7 +9,15 @@ export const SHOW_PROCESS_LOG: logType = (["verbose", "quiet"] as logType[]).fin
 export const processSessions: {[keyName: string]: serviceUnit} = {};
 export const regexValid = /\.((c|m|)js|json)$/;
 export const varLog = "/var/log";
+
 process.once("exit", () => Object.keys(processSessions).forEach(key => processSessions[key].stopExit()));
+if ((["on", "1", "true"]).includes(process.env.INITD_NO_EXIT)) {
+  const verifyInterval = setInterval(() => {
+    if (Object.keys(processSessions).length > 0) return;
+    return console.info("No process to run");
+  }, 1000);
+  process.once("exit", () => clearInterval(setInterval));
+}
 
 export type processConfig<moreOptions = any> = {
   command: string,

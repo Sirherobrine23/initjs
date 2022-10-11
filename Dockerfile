@@ -75,7 +75,7 @@ RUN npm install --no-save
 COPY ./ ./
 RUN npm run build
 
-ENV INITD_LOG="verbose"
+ENV INITD_LOG="verbose" INITD_NO_EXIT="1"
 WORKDIR /root
 ENTRYPOINT [ "sudo", "-E", "node", "/usr/local/initd/src/index.js" ]
 CMD [ "zsh" ]
