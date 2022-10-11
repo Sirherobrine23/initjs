@@ -3,6 +3,7 @@
   "process": {
     "restart": "always",
     "user": "grafana",
+    "group": "grafana",
     "cwd": "/usr/share/grafana",
     "command": "grafana-server",
     "args": [
@@ -12,7 +13,8 @@
       "cfg:default.paths.provisioning=$PROVISIONING_CFG_DIR",
       "cfg:default.paths.data=${DATA_DIR}",
       "cfg:default.paths.logs=${LOG_DIR}",
-      "cfg:default.paths.plugins=${PLUGINS_DIR}"
+      "cfg:default.paths.plugins=${PLUGINS_DIR}",
+      "cfg:default.server.http_port=8090"
     ],
     "more": {
       "restartCount": 3
@@ -39,23 +41,20 @@
   "preProcess": [
     {
       "command": "mkdir",
-      "args": [
-        "-pv",
-        "$LOG_DIR", "$DATA_DIR"
-      ]
+      "args": ["-pv", "$LOG_DIR", "$DATA_DIR"]
     },
     {
       "command": "touch",
-      "args": [
-        "$PID_FILE"
-      ]
+      "args": ["$PID_FILE"]
     },
     {
       "command": "chown",
       "args": [
         "-vR",
         "$GRAFANA_USER:$GRAFANA_GROUP",
-        "$PID_FILE", "$LOG_DIR", "$DATA_DIR"
+        "$PID_FILE",
+        "$LOG_DIR",
+        "$DATA_DIR"
       ]
     }
   ],

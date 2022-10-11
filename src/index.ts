@@ -1,4 +1,4 @@
-#!/usr/bin/env ts-node
+#!/usr/bin/env node
 import child_process from "node:child_process";
 import { startAllServices } from "./services";
 import { gid, uid } from "userid";

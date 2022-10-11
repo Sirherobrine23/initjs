@@ -73,9 +73,9 @@ WORKDIR /usr/local/initd
 COPY ./package*.json ./
 RUN npm install --no-save
 COPY ./ ./
-# RUN npm run build
+RUN npm run build
 
 ENV INITD_LOG="verbose"
 WORKDIR /root
-ENTRYPOINT [ "sudo", "-E", "ts-node", "/usr/local/initd/src/index.ts" ]
+ENTRYPOINT [ "sudo", "-E", "node", "/usr/local/initd/src/index.js" ]
 CMD [ "zsh" ]
