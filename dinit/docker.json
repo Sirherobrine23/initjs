@@ -1,0 +1,27 @@
+{
+  "name": "Minikube",
+  "process": {
+    "restart": "always",
+    "command": "minikube",
+    "args": [
+      "start",
+      "--driver=docker",
+      "--force"
+    ]
+  },
+  "dependecies": [
+    {
+      "name": "Docker daemon",
+      "process": {
+        "restart": "always",
+        "command": "dockerd",
+        "args": [
+          "--experimental"
+        ],
+        "more": {
+          "restartCount": 3
+        }
+      }
+    }
+  ]
+}
