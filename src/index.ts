@@ -1,41 +1,17 @@
 #!/usr/bin/env ts-node
-import customChild from "./process";
-import os from "node:os";
-import path from "node:path";
-import extendsFs from "./extendsFs";
+import child_process from "node:child_process";
 import { startAllServices } from "./services";
-process.title = "Initd nodejs";
-const startScripts = "/startScripts";
-const varLog = "/var/log";
-
-(async function rootScript(){
-  if (await extendsFs.exists(startScripts)) {
-    (await extendsFs.readdirrecursive(startScripts)).forEach(scriptName => {
-      customChild.execFile({
-        command: scriptName,
-        options: {
-          cwd: os.homedir(),
-          logPath: {
-            stdout: path.join(varLog, `${path.basename(scriptName)}_stdout.log`),
-            stderr: path.join(varLog, `${path.basename(scriptName)}_stderr.log`)
-          }
-        }
-      });
-    });
-  }
-})();
-
-startAllServices();
+import { gid, uid } from "userid";
+startAllServices().then(console.log);
 
 // Start user command
 const userArgs = process.argv.slice(2);
 if (userArgs.length > 0) {
   const [command, ...commandArgs] = userArgs;
-  customChild.spawn({
-    command, args: commandArgs,
-    options: {
-      cwd: os.homedir(),
-      stdio: "inherit"
-    }
-  }).on("close", process.exit);
+  const uidProcess = uid(process.env.SUDO_USER||"root"), gidProcess = gid(process.env.SUDO_USER||"root")
+  let processUser: child_process.ChildProcess;
+  if (commandArgs.length === 0) processUser = child_process.spawn(command, {uid: uidProcess, gid: gidProcess, stdio: "inherit"});
+  else processUser = child_process.spawn(command, commandArgs, {uid: uidProcess, gid: gidProcess, stdio: "inherit"});
+  processUser.on("exit", code => process.exit(code));
+  processUser.on("error", () => {});
 };

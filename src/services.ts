@@ -3,24 +3,19 @@ import customProcess, {ChildProcess, optionsExecFile} from "./process";
 import extendsFs, { exists } from "./extendsFs";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { uid } from "userid";
-
-const servicesStorages = {default: path.join(process.cwd(), "dinit"), fist: "/etc/dinit", second: "/var/lib/dinit", three: path.join(__dirname, "../dinit")};
-export const SHOW_PROCESS_LOG: "verbose"|"quiet" = (["verbose", "quiet"]).find(type => type === process.env.INITD_LOG) as "verbose"|"quiet"||"quiet";
+import { gid, uid } from "userid";
+export type logType = "verbose"|"quiet";
+export const SHOW_PROCESS_LOG: logType = (["verbose", "quiet"] as logType[]).find(type => type === process.env.INITD_LOG)||"quiet";
 export const processSessions: {[keyName: string]: serviceUnit} = {};
 export const regexValid = /\.((c|m|)js|json)$/;
 export const varLog = "/var/log";
-// const runTest = setInterval(() => {
-//   if (Object.keys(processSessions).length === 0) {
-//     clearInterval(runTest);
-//     console.info("No process sessions");
-//   }
-// }, 1500);
+process.once("exit", () => Object.keys(processSessions).forEach(key => processSessions[key].stopExit()));
 
 export type processConfig<moreOptions = any> = {
   command: string,
   args?: string[],
   user?: string|number,
+  group?: string|number,
   env?: NodeJS.ProcessEnv,
   cwd?: string,
   more?: moreOptions,
@@ -31,7 +26,8 @@ export type servicesV1 = {
   process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number}>,
   preProcess?: processConfig|processConfig[],
   restartProcess?: processConfig,
-  onRestart?: processConfig
+  onRestart?: processConfig,
+  dependecies?: servicesV1[]
 };
 
 export const replaceEnv = /\$(|\{)([0-9A-Za-z_\-\+]+)(\}|)/;
@@ -47,12 +43,31 @@ export class serviceUnit {
   process: ChildProcess;
   processConfig: optionsExecFile;
   countRestart = 0;
+  subProcess: serviceUnit[] = []
 
   async restartProcess() {
     if (this.config.onRestart) {
       if (this.config.onRestart.args) await customProcess.execFileAsync(this.config.onRestart.command, this.config.onRestart.args, {cwd: this.config.onRestart.cwd, env: this.config.onRestart.env});
       else await customProcess.execFileAsync(this.config.onRestart.command, {cwd: this.config.onRestart.cwd, env: this.config.onRestart.env});
     }
+  }
+
+  async stopExit() {
+    return new Promise<number>((done, reject) => {
+      this.process.once("error", reject);
+      const timeout = setTimeout(() => this.process.kill("SIGKILL"), 5000);
+      this.process.once("close", code => {
+        done(code);
+        clearTimeout(timeout);
+      });
+    });
+  }
+
+  #delete(status: any) {
+    delete processSessions[this.config.name];
+    console.log("Process '%s' no restart, exit code/signal %o", this.config.name, status);
+    this.logStdout.close();
+    this.logStderr.close();
   }
 
   async startProcess(){
@@ -68,10 +83,10 @@ export class serviceUnit {
         env: this.config.process.env,
         maxBuffer: Infinity,
         uid: this.config.process.user?(typeof this.config.process.user === "string"?uid(this.config.process.user):this.config.process.user):0,
-        stdio: SHOW_PROCESS_LOG === "verbose"?"inherit":"ignore",
+        gid: this.config.process.group?(typeof this.config.process.group === "string"?gid(this.config.process.group):this.config.process.group):0,
+        pipeProcess: SHOW_PROCESS_LOG === "verbose",
       }
     };
-
 
     // Update env
     if (this.config.process.env) for (const key of Object.keys(this.config.process.env)) this.config.process.env[key] = replaceEnvCommand(this.config.process.env[key], this.config.process.env);
@@ -82,7 +97,7 @@ export class serviceUnit {
       if (!Array.isArray(this.config.preProcess)) this.config.preProcess = [this.config.preProcess];
       for (const preProcess of this.config.preProcess) await customProcess.execFileAsync(replaceEnvCommand(preProcess.command, this.config.process.env), (preProcess.args||[]).map(key => replaceEnvCommand(key, this.config.process.env)), {
         ...this.processConfig.options,
-        stdio: SHOW_PROCESS_LOG === "verbose"?"inherit":"ignore",
+        pipeProcess: SHOW_PROCESS_LOG === "verbose",
         uid: 0,
       });
     }
@@ -92,16 +107,14 @@ export class serviceUnit {
     this.process.stdout.on("data", data => this.logStdout.write(data));
     this.process.stderr.on("data", data => this.logStderr.write(data));
     this.process.on("close", async (code, signal) => {
-      if (this.config.process.more?.restartCount === 0|| this.countRestart++ < ((this.config.process.more?.restartCount||50))) {
-        if (this.config.process.more?.restart === "always"||(this.config.process.more?.restart === "on-error" && code !== 0)) {
-          await this.restartProcess();
-          return this.startProcess();
+      if (this.config.process.more?.restart === "always"||(this.config.process.more?.restart === "on-error" && code !== 0)) {
+        if (this.config.process.more?.restartCount) {
+          if (this.countRestart++ < (this.config.process.more?.restartCount)) return this.#delete(signal||code);
         }
+        await this.restartProcess();
+        return this.startProcess();
       }
-      delete processSessions[this.config.name];
-      console.log("Process '%s' no restart, exit code/signal %o", this.config.name, signal||code);
-      this.logStdout.close();
-      this.logStderr.close();
+      return this.#delete(signal||code);
     });
     console.info("Process '%s' started", this.config.name);
     return fs.writeFile(path.join(logRoot, "exec.json"), JSON.stringify(this.processConfig, null, 2));
@@ -110,10 +123,18 @@ export class serviceUnit {
     if (processSessions[unit.name]) throw new Error(`${unit.name} is already running.`);
     this.config = unit;
     processSessions[unit.name] = this;
+    if (unit.dependecies) for (const dependecie of unit.dependecies) this.subProcess.push(new serviceUnit(dependecie));
     this.startProcess();
   }
 }
 
+// Paths to load scripts
+const servicesStorages = {
+  default: path.join(__dirname, "../dinit"),
+  fist: "/etc/dinit",
+  second: "/var/lib/dinit",
+  three: path.join(process.cwd(), "dinit")
+};
 
 export async function startAllServices(){
   const scripts = [];
@@ -121,5 +142,11 @@ export async function startAllServices(){
   if (await extendsFs.exists(servicesStorages.fist)) scripts.push(servicesStorages.fist);
   if (await extendsFs.exists(servicesStorages.second)) scripts.push(servicesStorages.second);
   if (await extendsFs.exists(servicesStorages.three)) scripts.push(servicesStorages.three);
-  return Promise.all((await extendsFs.readdirrecursive(scripts)).filter(file => file.endsWith(".json")).map(async fileConfig => new serviceUnit(JSON.parse(await fs.readFile(fileConfig, "utf8")))));
+  return Promise.all((await extendsFs.readdirrecursive(scripts)).filter(file => file.endsWith(".json")).map(async fileConfig => {
+    try {
+      return new serviceUnit(JSON.parse(await fs.readFile(fileConfig, "utf8")))
+    } catch (err) {
+      return console.error(err);
+    }
+  }).filter(a => !!a));
 }

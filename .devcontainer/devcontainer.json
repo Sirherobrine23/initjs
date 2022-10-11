@@ -6,7 +6,7 @@
   "overrideCommand": false,
   "postCreateCommand": "npm install",
   "build": {
-    "dockerfile": "Dockerfile",
+    "dockerfile": "dev.Dockerfile",
     "args": {
       "USERNAME": "devcontainer",
       "USER_UID": "1000"

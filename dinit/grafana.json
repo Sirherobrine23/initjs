@@ -58,5 +58,24 @@
         "$PID_FILE", "$LOG_DIR", "$DATA_DIR"
       ]
     }
+  ],
+  "dependecies": [
+    {
+      "name": "Prometheus",
+      "process": {
+        "restart": "always",
+        "user": "prometheus",
+        "group": "prometheus",
+        "command": "prometheus",
+        "args": [
+          "--config.file=/etc/prometheus/prometheus.yml",
+          "--storage.tsdb.path=/var/lib/prometheus",
+          "--web.console.templates=/etc/prometheus/consoles",
+          "--web.console.libraries=/etc/prometheus/console_libraries",
+          "--web.listen-address=0.0.0.0:9090",
+          "--web.external-url="
+        ]
+      }
+    }
   ]
 }
