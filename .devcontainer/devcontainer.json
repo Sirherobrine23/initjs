@@ -20,18 +20,19 @@
     "target=/var/lib/docker,type=volume,source=devcontainersh23"
   ],
   "extensions": [
-		"benshabatnoam.google-translate-ext",
-		"eamodio.gitlens",
-		"github.vscode-pull-request-github",
-		"visualstudioexptteam.vscodeintellicode",
-		"redhat.vscode-yaml",
-		"ms-vscode-remote.remote-containers",
-		"vscode-icons-team.vscode-icons",
-		"me-dutour-mathieu.vscode-github-actions",
-		"cschleiden.vscode-github-actions",
-		"oderwat.indent-rainbow",
-		"ms-azuretools.vscode-docker"
-	],
+	"benshabatnoam.google-translate-ext",
+	"eamodio.gitlens",
+	"github.vscode-pull-request-github",
+	"visualstudioexptteam.vscodeintellicode",
+	"redhat.vscode-yaml",
+	"ms-vscode-remote.remote-containers",
+	"vscode-icons-team.vscode-icons",
+	"me-dutour-mathieu.vscode-github-actions",
+	"cschleiden.vscode-github-actions",
+	"oderwat.indent-rainbow",
+	"ms-azuretools.vscode-docker",
+	"inercia.vscode-k3d"
+],
 	"settings": {
     "editor.tabSize": 2,
     "editor.minimap.enabled": false,

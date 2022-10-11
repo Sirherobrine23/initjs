@@ -1,26 +1,24 @@
 {
-  "name": "Minikube",
+  "name": "Docker daemon",
   "process": {
     "restart": "always",
-    "command": "minikube",
+    "restartCount": 3,
+    "waitSeconds": 10,
+    "command": "dockerd",
     "args": [
-      "start",
-      "--driver=docker",
-      "--force"
+      "--experimental"
     ]
   },
   "dependecies": [
     {
-      "name": "Docker daemon",
+      "name": "K3d Kubernetes",
       "process": {
-        "restart": "always",
-        "command": "dockerd",
+        "restart": "no",
+        "command": "bash",
         "args": [
-          "--experimental"
-        ],
-        "more": {
-          "restartCount": 3
-        }
+          "-c",
+          "k3d cluster create node1 && chmod 777 $KUBECONFIG"
+        ]
       }
     }
   ]

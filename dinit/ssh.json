@@ -1,0 +1,15 @@
+{
+  "name": "SSH Server",
+  "process": {
+    "restart": "on-error",
+    "command": "/usr/sbin/sshd",
+    "args": [
+      "-D"
+    ],
+    "user": 0,
+    "group": 0,
+    "dirs": [
+      "/run/sshd"
+    ]
+  }
+}

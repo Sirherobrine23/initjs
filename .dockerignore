@@ -1,4 +1,4 @@
 node_modules/
-src/**/*.d.ts
-src/**/*.js
+*.d.ts
+*.js
 README.md

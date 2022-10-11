@@ -1,7 +1,7 @@
 {
   "name": "Grafana",
   "process": {
-    "restart": "always",
+    "restart": "on-error",
     "user": "grafana",
     "group": "grafana",
     "cwd": "/usr/share/grafana",
@@ -62,7 +62,7 @@
     {
       "name": "Prometheus",
       "process": {
-        "restart": "always",
+        "restart": "on-error",
         "user": "prometheus",
         "group": "prometheus",
         "command": "prometheus",

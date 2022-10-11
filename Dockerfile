@@ -20,6 +20,15 @@ RUN apt update && apt install -y software-properties-common cmake make build-ess
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt update && apt install -y gcc g++ && bash -c "$(curl -SsL https://apt.llvm.org/llvm.sh)"
 # ENV CC="/usr/bin/clang" CPP="/usr/bin/clang-cpp" CXX="/usr/bin/clang++" LD="/usr/bin/ld.lld"
 
+# Install Github CLI (gh)
+RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
+
+# Go (golang)
+RUN wget -qO- "https://go.dev/dl/go1.19.2.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
+
+# Install httpie
+RUN pip install --upgrade pip wheel && pip install --upgrade httpie
+
 # PHP and compose
 COPY --from=1 /build/composer.phar /usr/share/composer/composer.phar
 RUN apt update && apt install -y php && echo "php /usr/share/composer/composer.phar \"\$@\"" > /usr/local/bin/composer && chmod +x /usr/local/bin/composer
@@ -42,39 +51,31 @@ RUN wget -q -O /usr/share/keyrings/grafana.key https://packages.grafana.com/gpg.
   echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://packages.grafana.com/enterprise/deb stable main" | tee -a /etc/apt/sources.list.d/grafana.list && \
   apt update && apt install -y grafana
 
-# Docker, Docker Compose, minikube, kubectl, act, dive
+# Docker, Docker Compose, dive (https://github.com/wagoodman/dive), act (https://github.com/nektos/act)
 VOLUME [ "/var/lib/docker" ]
+COPY --from=0 /dive.bin /usr/local/bin/dive
 RUN wget -qO- https://get.docker.com | sh && \
   wget -q $(wget -qO- https://api.github.com/repos/docker/compose/releases/latest | grep 'browser_download_url' | grep -v '.sha' | cut -d '"' -f 4 | grep linux | grep $(uname -m) | head -n 1) -O /usr/local/bin/docker-compose && chmod +x -v /usr/local/bin/docker-compose && \
+  wget -qO- https://raw.githubusercontent.com/nektos/act/master/install.sh | bash && \
+  chmod a+x /usr/local/bin/dive
+
+# Install Kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/$(dpkg --print-architecture)/kubectl" && \
+  chmod +x kubectl && mv kubectl /usr/bin && \
   # Minikube
   curl -Lo minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-$(dpkg --print-architecture)" && \
   chmod +x minikube && mv minikube /usr/bin && \
-  # Install Kubectl
-  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/$(dpkg --print-architecture)/kubectl" && \
-  chmod +x kubectl && mv kubectl /usr/bin && \
-  # Install act (https://github.com/nektos/act)
-  wget -qO- https://raw.githubusercontent.com/nektos/act/master/install.sh | bash
+  # Install k3d
+  wget -q -O - https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
-# Install dive (https://github.com/wagoodman/dive)
-COPY --from=0 /dive.bin /usr/local/bin/dive
-RUN chmod a+x /usr/local/bin/dive
-
-# Install Github CLI (gh)
-RUN (wget -q "$(wget -qO- https://api.github.com/repos/cli/cli/releases/latest | grep 'browser_download_url' | grep '.deb' | cut -d \" -f 4 | grep $(dpkg --print-architecture))" -O /tmp/gh.deb && dpkg -i /tmp/gh.deb && rm /tmp/gh.deb) || echo "Fail Install gh"
-
-# Go (golang)
-RUN wget -qO- "https://go.dev/dl/go1.19.2.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf - && ln -s /usr/local/go/bin/go /usr/bin/go && ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
-
-# Install httpie
-RUN pip install --upgrade pip wheel && pip install --upgrade httpie
-
-# Create docker and minikube start script
+# Create start link
+ENV INITD_LOG="verbose" INITD_NO_EXIT="1" KUBECONFIG="/etc/kubeconf"
+ENTRYPOINT [ "sudo", "-E", "initjs" ]
+CMD [ "zsh" ]
+RUN (echo '#''!/bin/bash'; echo 'set -ex';echo 'echo "Now use sudo -E node /usr/local/initd/src/index.js" or sudo -E initjs'; echo "sudo -E INITD_NO_EXIT=\"1\" initjs" '"$@"') | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
 WORKDIR /usr/local/initd
 COPY ./package*.json ./
 RUN npm install --no-save
-ENV INITD_LOG="verbose" INITD_NO_EXIT="1"
-ENTRYPOINT [ "sudo", "-E", "initjs" ]
-CMD [ "zsh" ]
 COPY ./ ./
-RUN npm run build && npm link && (echo '#''!/bin/bash'; echo 'set -ex';echo 'echo "Now use sudo -E node /usr/local/initd/src/index.js" or sudo -E initjs'; echo "sudo -E INITD_NO_EXIT=\"1\" initjs" '"$@"') | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
+RUN npm run build && npm link
 WORKDIR /root

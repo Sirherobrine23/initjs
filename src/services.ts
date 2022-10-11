@@ -19,6 +19,12 @@ if ((["on", "1", "true"]).includes(process.env.INITD_NO_EXIT)) {
   process.once("exit", () => clearInterval(verifyInterval));
 }
 
+export const replaceEnv = /\$(|\{)([\W\S]+)(\}|)/;
+export function replaceEnvCommand(command: string, env: processConfig["env"]): string {
+  while (replaceEnv.test(command)) command = command.replace(replaceEnv, (_0, _1, arg) => env[arg?.replace("$", "")||""]||process.env[arg?.replace("$", "")||""]||"");
+  return command;
+}
+
 export type processConfig<moreOptions = any> = {
   command: string,
   args?: string[],
@@ -26,23 +32,19 @@ export type processConfig<moreOptions = any> = {
   group?: string|number,
   env?: NodeJS.ProcessEnv,
   cwd?: string,
-  more?: moreOptions,
-};
+  dirs?: string[],
+  waitSeconds?: number,
+} & moreOptions;
 
 export type servicesV1 = {
   name: string,
-  process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number}>,
   preProcess?: processConfig|processConfig[],
+  process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number}>,
+  postStartProcess?: processConfig<{catchError?: boolean}>|processConfig<{catchError?: boolean}>[],
   restartProcess?: processConfig,
   onRestart?: processConfig,
   dependecies?: servicesV1[]
 };
-
-export const replaceEnv = /\$(|\{)([0-9A-Za-z_\-\+]+)(\}|)/;
-export function replaceEnvCommand(command: string, env: processConfig["env"]): string {
-  while (replaceEnv.test(command)) command = command.replace(replaceEnv, (_0, _1, arg) => env[arg?.replace("$", "")||""]||process.env[arg?.replace("$", "")||""]||"");
-  return command;
-}
 
 export class serviceUnit {
   config: servicesV1;
@@ -51,7 +53,7 @@ export class serviceUnit {
   process: ChildProcess;
   processConfig: optionsExecFile;
   countRestart = 0;
-  subProcess: serviceUnit[] = []
+  subProcess: serviceUnit[] = [];
 
   async restartProcess() {
     if (this.config.onRestart) {
@@ -78,8 +80,15 @@ export class serviceUnit {
     if (this.logStderr) this.logStderr.close();
   }
 
+  depenciesLoaded = false;
+  async #loadDepencies() {
+    if (this.depenciesLoaded) return;
+    if (this.config.dependecies) this.subProcess = await Promise.all(this.config.dependecies.map(async dependecie => new serviceUnit(dependecie)));
+    this.depenciesLoaded = true;
+  }
+
   async startProcess(){
-    const logRoot = path.join(varLog, "initd", this.config.name);
+    const logRoot = path.join(varLog, "initjs", this.config.name);
     if (!await exists(logRoot)) await fs.mkdir(logRoot, {recursive: true});
     if (!this.logStdout) this.logStdout = createWriteStream(path.join(logRoot, "stdout.log"));
     if (!this.logStderr) this.logStderr = createWriteStream(path.join(logRoot, "stderr.log"));
@@ -110,29 +119,68 @@ export class serviceUnit {
       });
     }
 
+    // Dirs
+    if (this.config.process.dirs) {
+      await Promise.all(this.config.process.dirs.map(async dirPath => {
+        dirPath = path.resolve(dirPath);
+        if (!await exists(dirPath)) {
+          await fs.mkdir(dirPath, {recursive: true});
+          await fs.chown(dirPath, this.processConfig.options.uid, this.processConfig.options.gid);
+        }
+      }));
+    }
+
     // Main process
+    await fs.writeFile(path.join(logRoot, "exec.json"), JSON.stringify(this.processConfig, null, 2));
     this.process = customProcess.execFile(this.processConfig);
     this.process.stdout.on("data", data => this.logStdout.write(data));
     this.process.stderr.on("data", data => this.logStderr.write(data));
     this.process.on("close", async (code, signal) => {
-      if (this.config.process.more?.restart === "always"||(this.config.process.more?.restart === "on-error" && code !== 0)) {
-        if (this.config.process.more?.restartCount) {
-          if (this.countRestart++ < (this.config.process.more?.restartCount)) return this.#delete(signal||code);
-        }
-        await this.restartProcess().catch(err => this.#delete(err));
-        return this.startProcess().catch(err => this.#delete(err));
-      }
+      if (this.config.process.restart === "no") return this.#delete(signal||code);
+      else if (this.config.process.restartCount && this.countRestart++ >= this.config.process.restartCount) return this.#delete(signal||code);
+      else if (this.config.process.restart === "always") return await this.restartProcess().then(this.startProcess).catch(err => this.#delete(err));
+      else if (this.config.process.restart === "on-error" && code !== 0) return await this.restartProcess().then(this.startProcess).catch(err => this.#delete(err));
       return this.#delete(signal||code);
     });
-    console.info("Process '%s' started", this.config.name);
-    return fs.writeFile(path.join(logRoot, "exec.json"), JSON.stringify(this.processConfig, null, 2));
+
+    // Return
+    return new Promise<this>((done, reject) => {
+      this.process.once("error", reject);
+      this.process.once("spawn", async () => {
+        console.info("Process '%s' started", this.config.name);
+        if (this.config.process.waitSeconds) await new Promise(done => setTimeout(done, this.config.process.waitSeconds * 1000));
+        if (this.config.postStartProcess) {
+          if (!Array.isArray(this.config.postStartProcess)) this.config.postStartProcess = [this.config.postStartProcess];
+          for (const postProcess of this.config.postStartProcess) {
+            if (!postProcess.args) postProcess.args = [];
+            try {
+              await customProcess.execFileAsync(replaceEnvCommand(postProcess.command, this.processConfig.options.env), postProcess.args.map(a => replaceEnvCommand(a, this.processConfig.options.env)), {
+                cwd: postProcess.cwd,
+                env: postProcess.env,
+                uid: postProcess.user?(typeof postProcess.user === "string"?uid(postProcess.user):postProcess.user):0,
+                gid: postProcess.group?(typeof postProcess.group === "string"?uid(postProcess.group):postProcess.group):0,
+                pipeProcess: SHOW_PROCESS_LOG === "verbose"
+              });
+            } catch (err) {
+              if (postProcess.catchError) {
+                console.trace("Post process to '%s' catch error: %o", this.config.name, err);
+                continue;
+              }
+              throw err;
+            }
+          }
+        }
+        await this.#loadDepencies();
+        return done(this);
+      });
+    });
   }
-  constructor(unit: servicesV1) {
+
+  constructor(unit: servicesV1, loadStart = true) {
     if (processSessions[unit.name]) throw new Error(`${unit.name} is already running.`);
-    this.config = unit;
     processSessions[unit.name] = this;
-    if (unit.dependecies) for (const dependecie of unit.dependecies) this.subProcess.push(new serviceUnit(dependecie));
-    this.startProcess().catch(err => this.#delete(err));
+    this.config = unit;
+    if (loadStart) this.startProcess().catch(err => console.trace(err));
   }
 }
 
@@ -145,16 +193,12 @@ const servicesStorages = {
 };
 
 export async function startAllServices(){
+  const processUnitsObject: {[name: string]: servicesV1} = {};
   const scripts = [];
   if (await extendsFs.exists(servicesStorages.default)) scripts.push(servicesStorages.default);
   if (await extendsFs.exists(servicesStorages.fist)) scripts.push(servicesStorages.fist);
   if (await extendsFs.exists(servicesStorages.second)) scripts.push(servicesStorages.second);
   if (await extendsFs.exists(servicesStorages.three)) scripts.push(servicesStorages.three);
-  return Promise.all((await extendsFs.readdirrecursive(scripts)).filter(file => file.endsWith(".json")).map(async fileConfig => {
-    try {
-      return new serviceUnit(JSON.parse(await fs.readFile(fileConfig, "utf8")))
-    } catch (err) {
-      return console.error(err);
-    }
-  }).filter(a => !!a));
+  await Promise.all((await extendsFs.readdirrecursive(scripts)).filter(file => file.endsWith(".json")).map(async fileConfig => {const data: servicesV1 = JSON.parse(await fs.readFile(fileConfig, "utf8")); processUnitsObject[data.name] = data;}))
+  return Promise.all(Object.keys(processUnitsObject).map(key => (new serviceUnit(processUnitsObject[key], false)).startProcess()));
 }
