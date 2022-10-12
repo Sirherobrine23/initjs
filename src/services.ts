@@ -19,9 +19,18 @@ if ((["on", "1", "true"]).includes(process.env.INITD_NO_EXIT)) {
   process.once("exit", () => clearInterval(verifyInterval));
 }
 
-export const replaceEnv = /\$(|\{)([\W\S]+)(\}|)/;
-export function replaceEnvCommand(command: string, env: processConfig["env"]): string {
-  while (replaceEnv.test(command)) command = command.replace(replaceEnv, (_0, _1, arg) => env[arg?.replace("$", "")||""]||process.env[arg?.replace("$", "")||""]||"");
+export const replaceEnv = /\$(\{([\S\w]+)\}|([\S\w]+))/;
+export function replaceEnvCommand(command: string, env?: processConfig["env"]): string {
+  if (!env) env = {};
+  while (replaceEnv.test(command)) command = command.replace(replaceEnv, (_null, a, b) => {
+    const envKey = b||a;
+    if (!envKey) return "";
+    if (envKey.includes(":")) {
+      const [, keyName, ifBlank] = envKey.match(/^(.*):(.*)$/);
+      return env[keyName]||process.env[keyName]||ifBlank;
+    }
+    return env[envKey]||process.env[envKey]||"";
+  });
   return command;
 }
 
@@ -88,6 +97,7 @@ export class serviceUnit {
   }
 
   async startProcess(){
+    if (!this?.config) throw new Error("Invalid class setup!");
     const logRoot = path.join(varLog, "initjs", this.config.name);
     if (!await exists(logRoot)) await fs.mkdir(logRoot, {recursive: true});
     if (!this.logStdout) this.logStdout = createWriteStream(path.join(logRoot, "stdout.log"));

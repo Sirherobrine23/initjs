@@ -16,9 +16,6 @@
       "cfg:default.paths.plugins=${PLUGINS_DIR}",
       "cfg:default.server.http_port=8090"
     ],
-    "more": {
-      "restartCount": 3
-    },
     "env": {
       "GRAFANA_HOME": "/usr/share/grafana",
       "CONF_DIR": "/etc/grafana",
