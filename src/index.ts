@@ -6,7 +6,8 @@ import fs from "node:fs";
 import fsPromise from "node:fs/promises";
 import extendsFs from "./extendsFs";
 import yaml from "yaml";
-// import http from "node:net";
+import express from "express";
+import { tmpdir, userInfo } from "node:os";
 
 // type loadLevel = "quiet"|"q"|"off"|"verbose"|"b"|"on"|"1";
 export const SHOW_PROCESS_LOG = /verbose|v|on|1/.test(process.env.INITD_LOG)?"verbose":"quiet";
@@ -22,8 +23,8 @@ export type processConfig<moreOptions = {}> = {
   waitSeconds?: number,
 } & moreOptions;
 
-export type unitProcessV2 = {
-  name: string,
+export type unitProcessV2<unitName = string> = {
+  name: unitName,
   preProcess?: processConfig|processConfig[],
   process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number, waitKill?: number, if_no_file?: string[]}>,
   postStartProcess?: processConfig|processConfig[],
@@ -106,7 +107,7 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
     if (unit.preProcess) await postStart(unit, Array.isArray(unit.preProcess)?unit.preProcess:[unit.preProcess]);
     if (unit.process.dirs) await Promise.all(unit.process.dirs.map(async dirPath => {
       if (!(await extendsFs.exists(dirPath))) await fsPromise.mkdir(dirPath, {recursive: true});
-      await fsPromise.chmod(dirPath, 777);
+      await fsPromise.chmod(dirPath, 7777);
       await fsPromise.chown(dirPath, user.uid, user.gid);
     }))
     return new Promise<void>((done, reject) => {
@@ -188,7 +189,7 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
 }
 
 export const filesToInitjs = /\.((c|m|)js|json|y[a]ml)$/;
-export async function loadDinits() {
+async function loadDinits() {
   const folderDinit = [
     path.resolve(__dirname, "../initjs"),
   ];
@@ -209,4 +210,9 @@ export async function loadDinits() {
   return Promise.all(Object.keys(procs).map(key => startProcess(procs[key])));
 }
 
-loadDinits();
+// Listen socket
+export const socketListen = path.join(userInfo().username !== "root"?tmpdir():"/var/run", "initjs.sock");
+export const app = express();
+loadDinits().then(() => app.listen(socketListen, () => console.log("[Initjs]: All process started and sock listen on '%s'", socketListen)));
+app.use(express.json());
+app.use(express.urlencoded({extended: true}));
