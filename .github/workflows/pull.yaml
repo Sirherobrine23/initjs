@@ -1,8 +1,6 @@
 name: Pull request Docker build
 on:
   pull_request:
-    branches:
-      - main
 
 jobs:
   publish:

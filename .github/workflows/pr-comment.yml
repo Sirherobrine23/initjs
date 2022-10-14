@@ -1,8 +1,10 @@
 name: Comment on pull request
 on:
   workflow_run:
-    workflows: ["Pull request Docker build"]
     types: [completed]
+    workflows:
+      - "Pull request Docker build"
+
 jobs:
   pr_comment:
     if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
