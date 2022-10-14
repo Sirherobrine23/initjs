@@ -5,6 +5,7 @@
     "user": "grafana",
     "group": "grafana",
     "cwd": "/usr/share/grafana",
+    "restartCount": 8,
     "command": "grafana-server",
     "args": [
       "--pidfile=${PID_FILE}",

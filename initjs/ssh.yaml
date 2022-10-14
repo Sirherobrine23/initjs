@@ -1,0 +1,10 @@
+name: "SSH Server"
+process:
+  restart: on-error
+  restartCount: 5
+  group: 0
+  user: 0
+  command: /usr/sbin/sshd
+  args: ["-D"]
+  dirs:
+    - /run/sshd
