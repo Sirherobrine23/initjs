@@ -1,0 +1,21 @@
+name: Docker daemon
+process:
+  restart: on-error
+  restartCount: 6
+  waitSeconds: 15
+  command: dockerd
+  args:
+    - "--experimental"
+  if_no_file:
+    - "/var/run/docker.sock"
+
+dependecies:
+  - name: Minikube
+    process:
+      restart: on-error
+      restartCount: 6
+      command: minikube
+      args:
+        - "start"
+        - "--driver=docker"
+        - "--force"

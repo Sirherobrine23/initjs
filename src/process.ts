@@ -1,11 +1,12 @@
+export type { ChildProcess } from "node:child_process";
 import child_process from "node:child_process";
 import fs, { ObjectEncodingOptions } from "node:fs";
-export type { ChildProcess } from "node:child_process";
+import readline from "node:readline";
 
 export type logFile = {logPath?: {stdout: string, stderr?: string}};
 export type optionsSpawnFile = {command: string, args?: string[], options?: fs.ObjectEncodingOptions & child_process.SpawnOptions & logFile};
 
-export type pipeToProcess = {pipeProcess?: boolean};
+export type pipeToProcess = {pipeProcess?: string};
 export type optionsExec = {command: string, args?: string[], options?: fs.ObjectEncodingOptions & child_process.ExecOptions & logFile & pipeToProcess};
 export type optionsExecFile = {command: string, args?: string[], options?: fs.ObjectEncodingOptions & child_process.ExecFileOptions & logFile & pipeToProcess};
 export type ExecFileOptions = ObjectEncodingOptions & child_process.ExecFileOptions & pipeToProcess;
@@ -16,13 +17,14 @@ function pipeLog(exec: child_process.ChildProcess, logFiles: logFile["logPath"])
   exec.stdout.pipe(fs.createWriteStream(logFiles.stdout));
 }
 
-function pipeToProcess(exec: child_process.ChildProcess, logFiles?: logFile["logPath"]) {
-  exec.stdout.pipe(process.stdout);
-  exec.stderr.pipe(process.stderr);
-  exec.on("close", () => {
-    exec.stdout.unpipe(process.stdout);
-    exec.stderr.unpipe(process.stderr);
-  });
+function pipeToProcess(name: string, exec: child_process.ChildProcess, logFiles?: logFile["logPath"]) {
+  const err = readline.createInterface(exec.stderr);
+  err.on("error", () => {});
+  err.on("line", data => console.log("[Stderr: %s]: %s", name, data));
+  const out = readline.createInterface(exec.stdout);
+  out.on("error", () => {});
+  out.on("line", data => console.log("[Stdout: %s]: %s", name, data));
+  exec.on("close", () => {err.close(); out.close()});
   if (logFiles) pipeLog(exec, logFiles);
   return exec;
 }
@@ -44,7 +46,7 @@ export function exec(processConfig: optionsExec) {
   if (!processConfig.options) processConfig.options = {};
   processConfig.options.env = {...process.env, ...(processConfig.options.env||{})}
   const exec = child_process.exec(processConfig.command, processConfig.options);
-  if (processConfig.options.pipeProcess) pipeToProcess(exec, processConfig.options.logPath);
+  if (processConfig.options.pipeProcess) pipeToProcess(processConfig.options.pipeProcess, exec, processConfig.options.logPath);
   else if (processConfig.options.logPath) pipeLog(exec, processConfig.options.logPath);
   return exec;
 }
@@ -54,7 +56,7 @@ export function execFile(processConfig: optionsExecFile) {
   if (!processConfig.options) processConfig.options = {};
   processConfig.options.env = {...process.env, ...(processConfig.options.env||{})}
   const exec = child_process.execFile(processConfig.command, processConfig.args, processConfig.options);
-  if (processConfig.options.pipeProcess) pipeToProcess(exec, processConfig.options.logPath);
+  if (processConfig.options.pipeProcess) pipeToProcess(processConfig.options.pipeProcess, exec, processConfig.options.logPath);
   else if (processConfig.options.logPath) pipeLog(exec, processConfig.options.logPath);
   return exec;
 }

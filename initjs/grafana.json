@@ -5,6 +5,7 @@
     "user": "grafana",
     "group": "grafana",
     "cwd": "/usr/share/grafana",
+    "restartCount": 8,
     "command": "grafana-server",
     "args": [
       "--pidfile=${PID_FILE}",
@@ -27,12 +28,12 @@
       "PLUGINS_DIR": "/var/lib/grafana/plugins",
       "LOG_DIR": "/var/log/grafana",
       "MAX_OPEN_FILES": "10000",
-      "DEFAULT": "/etc/default/$NAME",
+      "DEFAULT": "/etc/default/${NAME}",
       "WORK_DIR": "$GRAFANA_HOME",
-      "CONF_FILE": "$CONF_DIR/grafana.ini",
-      "PROVISIONING_CFG_DIR": "$CONF_DIR/provisioning",
-      "PID_FILE": "/var/run/$NAME.pid",
-      "DAEMON": "/usr/sbin/$NAME"
+      "CONF_FILE": "${CONF_DIR}/grafana.ini",
+      "PROVISIONING_CFG_DIR": "${CONF_DIR}/provisioning",
+      "PID_FILE": "/var/run/${NAME}.pid",
+      "DAEMON": "/usr/sbin/${NAME}"
     }
   },
   "preProcess": [
@@ -59,7 +60,7 @@
     {
       "name": "Prometheus",
       "process": {
-        "restart": "on-error",
+        "restart": "no",
         "user": "prometheus",
         "group": "prometheus",
         "command": "prometheus",
