@@ -70,9 +70,10 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 
 # Create start link
 ENV INITD_LOG="verbose" INITD_NO_EXIT="1" KUBECONFIG="/etc/kubeconf"
-ENTRYPOINT [ "sudo", "-E", "initjs" ]
+STOPSIGNAL SIGSTOP
+ENTRYPOINT [ "sudo", "-E", "initjsd" ]
 CMD [ "zsh" ]
-RUN (echo '#''!/bin/bash'; echo 'set -ex';echo 'echo "Now use sudo -E node /usr/local/initd/src/index.js" or sudo -E initjs'; echo "sudo -E INITD_NO_EXIT=\"1\" initjs" '"$@"') | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
+RUN (echo '#''!/bin/bash'; echo 'set -ex';echo 'echo "Now use sudo -E node /usr/local/initd/src/index.js" or sudo -E initjsd'; echo "sudo -E INITD_NO_EXIT=\"1\" initjsd" '"$@"') | tee /usr/local/bin/start.sh && chmod a+x /usr/local/bin/start.sh
 WORKDIR /usr/local/initd
 COPY ./package*.json ./
 RUN npm install --no-save

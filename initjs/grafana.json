@@ -60,7 +60,7 @@
     {
       "name": "Prometheus",
       "process": {
-        "restart": "on-error",
+        "restart": "no",
         "user": "prometheus",
         "group": "prometheus",
         "command": "prometheus",

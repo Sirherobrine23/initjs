@@ -4,3 +4,5 @@ services:
     privileged: true
     init: true
     restart: on-failure
+    environment:
+      INITD_NO_EXIT: "${INITD_NO_EXIT:-quiet}"

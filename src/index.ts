@@ -4,7 +4,7 @@ import { gid, uid } from "userid";
 import path from "node:path";
 import fs from "node:fs";
 import fsPromise from "node:fs/promises";
-import extendsFs from "./extendsFs";
+import extendsFs, { exists } from "./extendsFs";
 import yaml from "yaml";
 import express from "express";
 import { tmpdir, userInfo } from "node:os";
@@ -73,16 +73,18 @@ async function postStart(unit: unitProcessV2, config: processConfig[]) {
   }
 }
 
-// Process sessions
-export const globalProcess: {[unitName: string]: {unit: unitProcessV2, process: childProcess.ChildProcess}} = {};
-
+export type stopReturn = {code: number|NodeJS.Signals, name?: string, endChilds?: stopReturn[]}
 export type processReturn = {
   name: string,
-  pid?: number,
+  getPid?: () => number,
   restartProcess: () => Promise<void>,
-  stopProcess: () => Promise<void>,
+  stopProcess: () => Promise<stopReturn>,
   childs?: processReturn[],
 };
+
+// Process sessions
+export const globalProcess: {[unitName: string]: processReturn} = {};
+process.once("exit", () => Object.keys(globalProcess).forEach(key => globalProcess[key].stopProcess()));
 
 export async function startProcess(unit: unitProcessV2, filePath?: string): Promise<processReturn> {
   if (globalProcess[unit.name]) throw new Error("The Process is already running!");
@@ -94,12 +96,13 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
 
   async function clean(endType?: "any"|"error"|"no-restart"|"restart", err?: any) {
     if (endType === "restart") return console.log("[%s]: Restarting", unit.name);
-    else if (endType === "error") console.log("[%s]: Catch error: %o", err);
-    else if (endType === "no-restart") console.log("[%s]: No restart, process closed");
+    else if (endType === "error") console.log("[%s]: Catch error: %o", unit.name, err);
+    else if (endType === "no-restart") console.log("[%s]: No restart, process closed", unit.name);
     else console.log("[%s]: End %s", unit.name, endType||"");
     delete globalProcess[unit.name];
   }
 
+  let childs: processReturn[] = [];
   async function startMainProcess() {
     if (unit.process.env) Object.keys(unit.process.env).forEach(key => unit.process.env[key] = replaceEnv(unit.process.env[key], unit.process.env));
     const user = {uid: unit.process.user?(typeof unit.process.user === "string"?uid(unit.process.user):unit.process.user):0, gid: unit.process.group?(typeof unit.process.group === "string"?gid(unit.process.group):unit.process.group):0};
@@ -135,21 +138,43 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
       unitProcess.on("spawn", async () => {
         if (unit.process.waitSeconds) await new Promise(done => setTimeout(done, unit.process.waitSeconds * 1000));
         if (unit.postStartProcess) await postStart(unit, Array.isArray(unit.postStartProcess)?unit.postStartProcess:[unit.postStartProcess]);
+
+        // Childrens process
+        if (unit.dependecies) for (const dependecie of unit.dependecies) {
+          if (typeof dependecie !== "string") startProcess(dependecie).then(child => childs.push(child)).catch(err => console.log("[%s]: Cannot start '%s' depencie, error:\r%o", unit.name, dependecie.name, err));
+          else {
+            if (filePath === undefined) {console.log("[%s]: Ignoring load file to '%s'", unit.name, dependecie); continue;};
+            const realPath = path.resolve(filePath, dependecie);
+            if (!(realPath.endsWith(".json")||realPath.endsWith(".yml")||realPath.endsWith(".yaml"))) {console.log("[%s]: Ignoring load file to '%s'", unit.name, realPath); continue;};
+            await Promise.resolve().then(() => fsPromise.readFile(realPath, "utf8")).then(data => {
+              const childUnit: unitProcessV2 = realPath.endsWith(".json")?JSON.parse(data):yaml.parse(data);
+              return startProcess(childUnit, realPath);
+            }).catch(err => console.log("[%s]: Cannot load depencie, error:\n%o", unit.name, err));
+          }
+        }
+
         return done();
       });
     });
   };
 
   async function stopProcess() {
+    let endChilds: stopReturn[];
+    if (childs && childs.length > 0) endChilds = await Promise.all(childs.map(child => child.stopProcess()));
     if (unitProcess.killed && unitProcess.exitCode !== null) unitProcess = undefined;
     else {
-      unitProcess.kill("SIGQUIT");
+      unitProcess.kill("SIGSTOP");
       await new Promise<void>((done, reject) => {
-        setTimeout(() => unitProcess.kill("SIGKILL"), unit.process.waitKill||2500);
-        unitProcess.once("close", done);
         unitProcess.once("error", reject);
+        unitProcess.once("close", done);
+        setTimeout(() => unitProcess.exitCode === null?unitProcess.kill("SIGKILL"):null, unit.process.waitKill||1000*60*2);
       });
     }
+    const code = unitProcess.exitCode||unitProcess.signalCode;
+    await clean("no-restart");
+    logStderr.close();
+    logStdout.close();
+    return {code, name: unit.name, endChilds};
   }
 
   let restartCount = 0;
@@ -162,30 +187,16 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
   }
 
   await startMainProcess();
-  globalProcess[unit.name] = {process: unitProcess, unit};
-
-  // Childrens process
-  let childs: processReturn[] = [];
-  if (unit.dependecies) for (const dependecie of unit.dependecies) {
-    if (typeof dependecie !== "string") startProcess(dependecie).then(child => childs.push(child)).catch(err => console.log("[%s]: Cannot start '%s' depencie, error:\r%o", unit.name, dependecie.name, err));
-    else {
-      if (filePath === undefined) {console.log("[%s]: Ignoring load file to '%s'", unit.name, dependecie); continue;};
-      const realPath = path.resolve(filePath, dependecie);
-      if (!(realPath.endsWith(".json")||realPath.endsWith(".yml")||realPath.endsWith(".yaml"))) {console.log("[%s]: Ignoring load file to '%s'", unit.name, realPath); continue;};
-      await Promise.resolve().then(() => fsPromise.readFile(realPath, "utf8")).then(data => {
-        const childUnit: unitProcessV2 = realPath.endsWith(".json")?JSON.parse(data):yaml.parse(data);
-        return startProcess(childUnit, realPath);
-      }).catch(err => console.log("[%s]: Cannot load depencie, error:\n%o", unit.name, err));
-    }
-  }
-
-  return {
+  const returnData: processReturn = {
     name: unit.name,
-    pid: unitProcess?.pid,
+    getPid: () => unitProcess?.pid,
     restartProcess,
     stopProcess,
     childs
   };
+
+  globalProcess[unit.name] = returnData;
+  return returnData;
 }
 
 export const filesToInitjs = /\.((c|m|)js|json|y[a]ml)$/;
@@ -213,6 +224,42 @@ async function loadDinits() {
 // Listen socket
 export const socketListen = path.join(userInfo().username !== "root"?tmpdir():"/var/run", "initjs.sock");
 export const app = express();
-loadDinits().then(() => app.listen(socketListen, () => console.log("[Initjs]: All process started and sock listen on '%s'", socketListen)));
+Promise.resolve().then(async () => (await exists(socketListen))?fs.promises.rm(socketListen, {force: true}):Promise.resolve()).then(() => loadDinits().then(() => app.listen(socketListen, () => console.log("[Initjs]: All process started and sock listen on '%s'", socketListen))));
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
+app.use((_req, res, next): void => {
+  res.json = (body) => res.setHeader("Content-Type", "application/json").send(JSON.stringify(body, null, 2));
+  return next();
+});
+
+// Listen process
+app.get("/", ({res}) => res.status(200).json(Object.getOwnPropertyNames(globalProcess).reduce((a, b) => {
+  const processChild = globalProcess[b];
+  a[b] = {
+    pid: processChild.getPid(),
+  };
+  return a;
+}, {})));
+
+// Register new process
+app.post("/", (req, res) => startProcess(req.body).then(unitData => res.status(200).json(unitData)).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {}))));
+
+// Delete process
+app.delete("/", (req, res) => {
+  const processName: string = req.body?.name;
+  if (!globalProcess[processName]) return res.status(400).json({error: "Process not started"});
+  return globalProcess[processName].stopProcess().then(status => res.status(200).json({status})).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})));
+});
+
+// Restart process
+app.put("/restart", (req, res) => {
+  const processName: string = req.body?.name;
+  if (!globalProcess[processName]) return res.status(400).json({error: "Process not started"});
+  return globalProcess[processName].restartProcess().then(() => res.status(200).json(globalProcess[processName])).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})));
+});
+
+// catch error
+app.use((err: Error, _req, res, _next) => res.status(500).json({
+  error: "Backend get error",
+  full: Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})
+}));

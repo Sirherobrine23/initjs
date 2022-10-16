@@ -19,9 +19,12 @@ function pipeLog(exec: child_process.ChildProcess, logFiles: logFile["logPath"])
 
 function pipeToProcess(name: string, exec: child_process.ChildProcess, logFiles?: logFile["logPath"]) {
   const err = readline.createInterface(exec.stderr);
-  err.on("line", data => console.log("[%s]: %s", name, data));
+  err.on("error", () => {});
+  err.on("line", data => console.log("[Stderr: %s]: %s", name, data));
   const out = readline.createInterface(exec.stdout);
-  out.on("line", data => console.log("[%s]: %s", name, data));
+  out.on("error", () => {});
+  out.on("line", data => console.log("[Stdout: %s]: %s", name, data));
+  exec.on("close", () => {err.close(); out.close()});
   if (logFiles) pipeLog(exec, logFiles);
   return exec;
 }
