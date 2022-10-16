@@ -167,7 +167,10 @@ export async function startProcess(unit: unitProcessV2, filePath?: string): Prom
       await new Promise<void>((done, reject) => {
         unitProcess.once("error", reject);
         unitProcess.once("close", done);
-        setTimeout(() => unitProcess.exitCode === null?unitProcess.kill("SIGKILL"):null, unit.process.waitKill||1000*60*2);
+        setTimeout(() => {
+          console.log(unitProcess.exitCode, unitProcess.signalCode);
+          if (unitProcess.exitCode === null) unitProcess.kill("SIGKILL")
+        }, unit.process.waitKill||1000*60*2);
       });
     }
     const code = unitProcess.exitCode||unitProcess.signalCode;
@@ -252,10 +255,13 @@ app.delete("/", (req, res) => {
 });
 
 // Restart process
-app.put("/restart", (req, res) => {
+app.put("/restart", async (req, res) => {
   const processName: string = req.body?.name;
   if (!globalProcess[processName]) return res.status(400).json({error: "Process not started"});
-  return globalProcess[processName].restartProcess().then(() => res.status(200).json(globalProcess[processName])).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})));
+  await globalProcess[processName].restartProcess();
+  return res.json({
+    pid: globalProcess[processName].getPid(),
+  });
 });
 
 // catch error
