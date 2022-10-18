@@ -34,17 +34,17 @@ jobs:
           cache-to: type=gha,scope=${{ github.ref }}_sirherobrine23_docker_amd64
           platforms: "linux/amd64"
           context: ./
-          push: true
-          tags: cache:latest
+          push: false
+          tags: cacheamd64:latest
 
       - name: Build image arm64
         uses: docker/build-push-action@v3
         with:
-          cache-from: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker_amr64' || '' }}
-          cache-to: type=gha,scope=${{ github.ref }}_sirherobrine23_docker_amr64
+          cache-from: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker_arm64' || '' }}
+          cache-to: type=gha,scope=${{ github.ref }}_sirherobrine23_docker_arm64
           platforms: "linux/arm64"
           context: ./
-          push: true
+          push: false
           tags: cachearm64:latest
 
       - name: Build image
