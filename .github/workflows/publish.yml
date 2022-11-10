@@ -30,8 +30,8 @@ jobs:
       - name: Build image amd64
         uses: docker/build-push-action@v3
         with:
-          cache-from: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker_amd64' || '' }}
-          cache-to: type=gha,scope=${{ github.ref }}_sirherobrine23_docker_amd64
+          cache-from: type=gha,scope=sirherobrine23_docker_amd64
+          cache-to: type=gha,scope=sirherobrine23_docker_amd64
           platforms: "linux/amd64"
           context: ./
           push: false
@@ -40,8 +40,8 @@ jobs:
       - name: Build image arm64
         uses: docker/build-push-action@v3
         with:
-          cache-from: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker_arm64' || '' }}
-          cache-to: ${{ github.event_name == 'push' && 'type=gha,scope=${{ github.ref }}_sirherobrine23_docker_arm64' || '' }}
+          cache-from: sirherobrine23_docker_arm64
+          cache-to: sirherobrine23_docker_arm64
           platforms: "linux/arm64"
           context: ./
           push: false
