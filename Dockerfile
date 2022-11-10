@@ -38,6 +38,9 @@ RUN wget -qO- https://raw.githubusercontent.com/Sirherobrine23/DebianNodejsFiles
   # Install node apps
   npm i -g ts-node typescript autocannon pnpm
 
+# Install Openjdk
+RUN apt update && apt list | grep -E 'openjdk-[0-9\.]+-(jre|jdk)' | grep -v -E 'headless|zero' | cut -d / -f 1 | xargs apt install -y
+
 # Install Prometheus
 RUN groupadd --system prometheus && useradd -s /sbin/nologin --system -g prometheus prometheus && \
   mkdir /var/lib/prometheus && for i in rules rules.d files_sd; do mkdir -vp /etc/prometheus/${i}; done && \
@@ -69,7 +72,8 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
   wget -q -O - https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
 # Create start link
-ENV INITD_LOG="verbose" INITD_NO_EXIT="1" KUBECONFIG="/etc/kubeconf"
+ENV INITD_LOG="verbose" INITD_NO_EXIT="1"
+# ENV KUBECONFIG="/etc/kubeconf"
 STOPSIGNAL SIGSTOP
 ENTRYPOINT [ "sudo", "-E", "initjsd" ]
 CMD [ "zsh" ]
