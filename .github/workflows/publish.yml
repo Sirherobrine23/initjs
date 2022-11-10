@@ -27,29 +27,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image amd64
-        uses: docker/build-push-action@v3
-        with:
-          cache-from: type=gha,scope=sirherobrine23_docker_amd64
-          cache-to: type=gha,scope=sirherobrine23_docker_amd64
-          platforms: "linux/amd64"
-          context: ./
-          push: false
-          tags: cacheamd64:latest
-
-      - name: Build image arm64
-        uses: docker/build-push-action@v3
-        with:
-          cache-from: sirherobrine23_docker_arm64
-          cache-to: sirherobrine23_docker_arm64
-          platforms: "linux/arm64"
-          context: ./
-          push: false
-          tags: cachearm64:latest
-
       - name: Build image
         uses: docker/build-push-action@v3
         with:
+          cache-from: type=gha,scope=sirherobrine23_docker
+          cache-to: type=gha,scope=sirherobrine23_docker
           platforms: "linux/amd64,linux/arm64"
           context: ./
           push: true
