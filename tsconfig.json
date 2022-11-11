@@ -18,11 +18,9 @@
     }
   },
   "include": [
-    "src/**/*",
-    "load.js"
+    "src/**/*"
   ],
   "exclude": [
-    "node_modules/",
-    "test/"
+    "node_modules/"
   ]
 }
