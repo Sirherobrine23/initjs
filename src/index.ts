@@ -1,24 +1,62 @@
+#!/usr/bin/env node
+import { mainProcess } from "./mainProcess";
+import * as coreutils from "@the-bds-maneger/core-utils";
+import yaml from "yaml";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import Yargs from "yargs";
-import * as coreutils from "@the-bds-maneger/core-utils";
 import userid from "userid";
 
 Yargs(process.argv.slice(2)).wrap(Yargs.terminalWidth()).version(false).help().alias("h", "help").demandCommand().command("process", "Maneger process in initjs daemon", yargs => {
-  return yargs.demandCommand().command("ps", "list process status in initjs", yargs => {return yargs.parseSync()}).parseSync();
+  return yargs.demandCommand().command("ps", "list process status in initjs", async yargs => {
+    return yargs.parseSync();
+  }).parseAsync();
 }).command("start", "run initjs in background to maneger process, listen socket and http server", async yargs => {
-  yargs = yargs.options("port", {
-    alias: "P",
-    description: "Porta para ouvir as requisições",
-    type: "number"
-  }).option("socket-path", {
-    alias: "S",
+  const options = yargs.option("socket-path", {
+    type: "string",
     description: "Caminho para criar um socket unix para poder se comunicar com initjs",
+    alias: "S",
     default: path.join(os.homedir(), ".initjs.sock")
-  })
-  return yargs.parseSync();
+  }).options("port", {
+    type: "number",
+    description: "Porta para ouvir as requisições para o servidor do HTTP(s)",
+    alias: "P",
+  }).option("httpcert", {
+    type: "string",
+    description: "Caminho para o certificado caso queira que seja por HTTPs o servidor HTTP",
+  }).option("initjs-folder", {
+    type: "string",
+    description: "Caminho para a pasta que contenha os arquivos para carregar para o initjs",
+    default: path.join(process.cwd(), ".initjs")
+  }).option("log-level", {
+    type: "string",
+    description: "Log level to Initjs",
+    default: "show",
+    choices: [
+      "none", "NONE", "0",
+      "show", "SHOW", "1",
+    ]
+  }).parseSync();
+  const processManeger = new mainProcess({
+    callback: () => console.log("[%s CLI]: Socket listen on '%s'", new Date(), options["socket-path"]),
+    path: options["socket-path"],
+  },
+  {
+    callback: () => console.log("[%s CLI]: HTTP port listen on %f", new Date(), options.port),
+    port: options.port,
+  });
+  processManeger.on("error", err => console.error("[%s ERROR]: %o", new Date(), err));
+  processManeger.on("processExit", data => console.log("[%s INITJS]: Program: '%s', Exit code/signal: %o", new Date(), data.name, data.signal||data.code));
+  processManeger.on("noRestart", data => console.log("[%s INITJS]: Program: '%s', Exit code/signal: %o and no restart", new Date(), data.name, data.signal||data.code));
+  processManeger.on("spawn", ({name}) => console.log("[%s INITJS]: Program started (%s)", new Date(), name));
+
+  if ((["show", "SHOW", "1"]).includes(options["log-level"])) processManeger.on("log", log => console.log("[%s %s '%s']: %s", new Date(), log.from.toUpperCase(), log.name, log.data));
+
+  const registerLocalInit = async (file: string) => processManeger.registerProcess(file.endsWith(".json")?JSON.parse(await fs.readFile(file, "utf8")):yaml.parse(await fs.readFile(file, "utf8")));
+  if (await coreutils.extendFs.exists(path.resolve(process.cwd(), options["initjs-folder"]))) await Promise.all((await fs.readdir(path.resolve(process.cwd(), options["initjs-folder"]))).filter(file => /\.(json|y[a]ml)$/.test(file)).map(file => registerLocalInit(path.resolve(process.cwd(), options["initjs-folder"], file)).catch(err => err)));
+  return processManeger;
 }).command("create-user", "Crie um usuario para o sistema de forma automatico", async yargs => {
   if (process.platform !== "linux") throw new Error("Platform not avaible to this function, only linux!");
   const data = yargs.options("username", {

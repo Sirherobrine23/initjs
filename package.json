@@ -8,9 +8,9 @@
     "build": "tsc"
   },
   "bin": {
-    "initjsd": "./src/index.js",
-    "initjs": "./src/cli.js",
-    "initd": "./src/index.js"
+    "initjs": "./src/index.js",
+    "initjsd": "./src/backgroud.js",
+    "initd": "./src/backgroud.js"
   },
   "repository": {
     "type": "git",
