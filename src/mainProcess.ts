@@ -91,6 +91,8 @@ export class mainProcess extends EventEmitter {
     }, {})));
     app.post("/", (req, res) => this.registerProcess(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
     app.put("/", (req, res) => this.updateConfig(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
+    app.delete("/", (req, res) => this.deleteProcess(req.body?.name).then(() => res.json({ok: true})).catch(err => res.status(400).json({err: err?.message||err})));
+
     coreUtils.extendFs.exists(typeof socketPath === "string"?socketPath:socketPath.path).then(async exist => {
       if (exist) await fs.rm(typeof socketPath === "string"?socketPath:socketPath.path);
       app.listen(typeof socketPath === "string"?socketPath:socketPath.path, async () => {
@@ -110,6 +112,7 @@ export class mainProcess extends EventEmitter {
   }
 
   async deleteProcess(name: string) {
+    if (!name) throw new Error("name is blank");
     if (!Object.keys(this.processList).includes(name)) throw new Error("Process not exists");
     if (this.processList[name].status !== "stoped") {
       this.processList[name].childProcess?.kill("SIGKILL");
