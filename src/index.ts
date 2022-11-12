@@ -1,271 +1,180 @@
 #!/usr/bin/env node
-import * as childProcess from "./process";
-import { gid, uid } from "userid";
+import { mainProcess, apiProcessList } from "./mainProcess";
+import * as coreutils from "@the-bds-maneger/core-utils";
+import os from "node:os";
 import path from "node:path";
-import fs from "node:fs";
-import fsPromise from "node:fs/promises";
-import extendsFs, { exists } from "./extendsFs";
-import yaml from "yaml";
-import express from "express";
-import { tmpdir, userInfo } from "node:os";
-
-// type loadLevel = "quiet"|"q"|"off"|"verbose"|"b"|"on"|"1";
-export const SHOW_PROCESS_LOG = /verbose|v|on|1/.test(process.env.INITD_LOG)?"verbose":"quiet";
-
-export type processConfig<moreOptions = {}> = {
-  command: string,
-  args?: string[],
-  user?: string|number,
-  group?: string|number,
-  env?: NodeJS.ProcessEnv,
-  cwd?: string,
-  dirs?: string[],
-  waitSeconds?: number,
-} & moreOptions;
-
-export type unitProcessV2<unitName = string> = {
-  name: unitName,
-  preProcess?: processConfig|processConfig[],
-  process: processConfig<{restart?: "always"|"no"|"on-error", restartCount?: number, waitKill?: number, if_no_file?: string[]}>,
-  postStartProcess?: processConfig|processConfig[],
-  restartProcess?: processConfig,
-  onRestart?: processConfig|processConfig[],
-  dependecies?: string|unitProcessV2[]
-};
-
-export function replaceEnv(command: string, env?: processConfig["env"]): string {
-  if (!env) env = {};
-  const envTypeTwo = /\$(\{([\S\w]+)\})/;
-  while (envTypeTwo.test(command)) command = command.replace(envTypeTwo, (...args) => {
-    const envKey = args[2]||args[1];
-    if (!envKey) return "";
-    if (envKey.includes(":")) {
-      const [, keyName, ifBlank] = envKey.match(/^(.*):[-](.*)$/);
-      return env[keyName]||process.env[keyName]||ifBlank||"";
-    }
-    return env[envKey]||process.env[envKey]||"";
-  });
-
-  const envTypeOne = /\$([\S\w]+)/;
-  while (envTypeOne.test(command)) command = command.replace(envTypeOne, (...args) => {
-    if (!args[1]) return "";
-    if (args[1].includes(":")) {
-      const [, keyName, ifBlank] = args[1].match(/^(.*):(.*)$/);
-      return env[keyName]||process.env[keyName]||ifBlank||"";
-    }
-    return env[args[1]]||process.env[args[1]]||"";
-  });
-  return command;
+import fs from "node:fs/promises";
+import crypto from "node:crypto";
+import Yargs from "yargs";
+import userid from "userid";
+process.title = "initjs";
+async function findSocket() {
+  const tmp = path.join(os.tmpdir(), "initjs.sock"), dottmp = path.join(os.tmpdir(), ".initjs.sock"), home = path.join(os.homedir(), "initjs.sock"), dothome = path.join(os.homedir(), ".initjs.sock");
+  if (await coreutils.extendFs.exists(tmp)) return tmp;
+  else if (await coreutils.extendFs.exists(dottmp)) return dottmp;
+  else if (await coreutils.extendFs.exists(home)) return home;
+  else if (await coreutils.extendFs.exists(dothome)) return dothome;
+  else if (process.platform === "linux" && await coreutils.extendFs.exists("/var/run/initjs.sock")) return "/var/run/initjs.sock";
+  else return home;
 }
 
-async function postStart(unit: unitProcessV2, config: processConfig[]) {
-  for (const processConfig of config) {
-    if (processConfig.env) Object.keys(processConfig.env).forEach(key => processConfig.env[key] = replaceEnv(processConfig.env[key], processConfig.env));
-    const user = {uid: processConfig.user?(typeof processConfig.user === "string"?uid(processConfig.user):processConfig.user):0, gid: processConfig.group?(typeof processConfig.group === "string"?gid(processConfig.group):processConfig.group):0};
-    processConfig.env = {...(processConfig.env||{}), ...(unit.process.env||{})};
-    await childProcess.execFileAsync(replaceEnv(processConfig.command, processConfig.env), (processConfig.args||[]).map(arg => replaceEnv(arg, processConfig.env)), {
-      cwd: processConfig.cwd,
-      env: processConfig.env,
-      uid: user.uid,
-      gid: user.gid,
-      pipeProcess: SHOW_PROCESS_LOG === "verbose"?"postProcess":undefined
-    }).catch(err => console.error("[%s]: Post/Pre scripts, error:\n%o", unit.name, err));
+Yargs(process.argv.slice(2)).wrap(Yargs.terminalWidth()).version(false).help().alias("h", "help").demandCommand().command("start", "run initjs in background to maneger process, listen socket and http server", async yargs => {
+  const options = yargs.option("socket-path", {
+    type: "string",
+    description: "Caminho para criar um socket unix para poder se comunicar com initjs",
+    alias: "S",
+    default: path.join(os.homedir(), ".initjs.sock")
+  }).options("port", {
+    type: "number",
+    description: "Porta para ouvir as requisições para o servidor do HTTP(s)",
+    alias: "P",
+    default: 9448
+  }).option("httpcert", {
+    type: "string",
+    description: "Caminho para o certificado caso queira que seja por HTTPs o servidor HTTP",
+  }).option("initjs-folder", {
+    type: "array",
+    string: true,
+    description: "Caminho para a pasta que contenha os arquivos para carregar para o initjs",
+    default: [path.join(process.cwd(), ".initjs")]
+  }).option("log-level", {
+    type: "string",
+    description: "Log level to Initjs",
+    default: "show",
+    choices: [
+      "none", "NONE", "0",
+      "show", "SHOW", "1",
+    ]
+  }).parseSync();
+  const processManeger = new mainProcess({
+    initjsFolder: options["initjs-folder"],
+    socketPath: {
+      callback: () => console.log("[%s CLI]: Socket listen on '%s'", new Date(), options["socket-path"]),
+      path: options["socket-path"],
+    },
+    httpPort: {
+      callback: () => console.log("[%s CLI]: HTTP port listen on %f", new Date(), options.port),
+      port: options.port,
+    },
+  });
+  processManeger.on("error", err => console.error("[%s ERROR]: %o", new Date(), err));
+  processManeger.on("processExit", data => console.log("[%s INITJS]: Program: '%s', Exit code/signal: %o", new Date(), data.name, data.signal||data.code));
+  processManeger.on("noRestart", data => console.log("[%s INITJS]: Program: '%s', Exit code/signal: %o and no restart", new Date(), data.name, data.signal||data.code));
+  processManeger.on("spawn", ({name}) => console.log("[%s INITJS]: Program started (%s)", new Date(), name));
+  // if ((["show", "SHOW", "1"]).includes(options["log-level"])) processManeger.on("log", log => console.log("[%s %s '%s']: %s", new Date(), log.from.toUpperCase(), log.name, log.data));
+  const [, command, ...args] = options._.map(String);
+  if (command) return coreutils.customChildProcess.execFileAsync(command, args, {stdio: "inherit"});
+  return null;
+}).command("create-user", "Crie um usuario para o sistema de forma automatico", async yargs => {
+  if (process.platform !== "linux") throw new Error("Platform not avaible to this function, only linux!");
+  const data = yargs.options("username", {
+    type: "string",
+    alias: "u",
+    description: "Username to User",
+    default: process.env.USERNAME||crypto.randomBytes(8).toString("hex")
+  }).option("password", {
+    type: "string",
+    alias: "p",
+    description: "User password",
+  }).option("shell", {
+    type: "string",
+    alias: "s",
+    description: "User default shell",
+    default: "zsh"
+  }).option("ohmyzsh", {
+    type: "boolean",
+    description: "Install the Oh my zsh if shell is zsh",
+    default: true
+  }).option("uid", {
+    type: "string",
+    description: "User ID"
+  }).option("gid", {
+    type: "string",
+    description: "User group ID"
+  }).option("groups", {
+    type: "array",
+    string: true,
+    description: "User groups",
+    default: ["docker", "sudo"]
+  }).option("sudonopasswdask", {
+    type: "boolean",
+    alias: "S",
+    description: "Sudo no ask passwd on run sudo ...commands, valid if sudo group id add in group list",
+    default: true
+  }).parseSync();
+
+  // Check if exists shell
+  if (!data.shell) data.shell = "bash";
+  if (data.shell.startsWith("/")) {
+    if (!await coreutils.extendFs.exists(data.shell)) throw new Error("Shell path not exists");
+  } else if (await coreutils.customChildProcess.commendExists(data.shell)) data.shell = (await coreutils.customChildProcess.commendExists(data.shell, false)).trim(); else throw new Error("Shell not exists");
+  if (!data.shell.endsWith("zsh")) data.ohmyzsh = false;
+
+  // Check username
+  if (await Promise.resolve().then(() => userid.uid(data.username)).then(() => true).catch(() => false)) throw new Error("User aredy exists in system!");
+  if (data.uid) {
+    if (await Promise.resolve().then(() => userid.username(parseInt(data.uid))).then(() => true).catch(() => false)) throw new Error("User aredy exists in system with a id!");
   }
-}
 
-export type stopReturn = {code: number|NodeJS.Signals, name?: string, endChilds?: stopReturn[]}
-export type processReturn = {
-  name: string,
-  getPid?: () => number,
-  restartProcess: () => Promise<void>,
-  stopProcess: () => Promise<stopReturn>,
-  childs?: processReturn[],
-};
+  // Check if not exists UID and GID
+  if (data.gid) data.gid = (await Promise.resolve().then(() => userid.groupname(parseInt(data.gid))).catch(() => coreutils.customChildProcess.execFileAsync("groupadd", ["--gid", parseInt(data.gid).toFixed(0), data.username])).then(() => userid.gid(data.username))).toFixed(0);
 
-// Process sessions
-export const globalProcess: {[unitName: string]: processReturn} = {};
-process.once("exit", () => Object.keys(globalProcess).forEach(key => globalProcess[key].stopProcess()));
-
-export async function startProcess(unit: unitProcessV2, filePath?: string): Promise<processReturn> {
-  if (globalProcess[unit.name]) throw new Error("The Process is already running!");
-  const logRoot = path.join("/var/log/initjs", unit.name);
-  if (!await extendsFs.exists(logRoot)) await fsPromise.mkdir(logRoot, {recursive: true});
-  const logStdout = fs.createWriteStream(path.join(logRoot, "stdout.log"));
-  const logStderr = fs.createWriteStream(path.join(logRoot, "stderr.log"));
-  let unitProcess: childProcess.ChildProcess;
-
-  async function clean(endType?: "any"|"error"|"no-restart"|"restart", err?: any) {
-    if (endType === "restart") return console.log("[%s]: Restarting", unit.name);
-    else if (endType === "error") console.log("[%s]: Catch error: %o", unit.name, err);
-    else if (endType === "no-restart") console.log("[%s]: No restart, process closed", unit.name);
-    else console.log("[%s]: End %s", unit.name, endType||"");
-    delete globalProcess[unit.name];
+  // Register user
+  const argAdd = ["--shell", data.shell.trim(), "--create-home"];
+  if (data.uid) argAdd.push("--uid", data.uid);
+  if (data.gid) argAdd.push("--gid", data.gid);
+  if (data.groups?.length > 0) {
+    argAdd.push("-G", data.groups.join(","));
+    if (data.sudonopasswdask&& data.groups.includes("sudo")) {
+      await fs.writeFile(path.join("/etc/sudoers.d", data.username), `${data.username} ALL=(ALL) NOPASSWD:ALL\n`);
+      await fs.chmod(path.join("/etc/sudoers.d", data.username), "0440");
+    }
   }
-
-  let childs: processReturn[] = [];
-  async function startMainProcess() {
-    if (unit.process.env) Object.keys(unit.process.env).forEach(key => unit.process.env[key] = replaceEnv(unit.process.env[key], unit.process.env));
-    const user = {uid: unit.process.user?(typeof unit.process.user === "string"?uid(unit.process.user):unit.process.user):0, gid: unit.process.group?(typeof unit.process.group === "string"?gid(unit.process.group):unit.process.group):0};
-    if (unit.process.if_no_file) if ((await Promise.all(unit.process.if_no_file.map(filePath => extendsFs.exists(filePath)))).find(a => a)) clean("error", new Error("File exists"));
-    if (unit.preProcess) await postStart(unit, Array.isArray(unit.preProcess)?unit.preProcess:[unit.preProcess]);
-    if (unit.process.dirs) await Promise.all(unit.process.dirs.map(async dirPath => {
-      if (!(await extendsFs.exists(dirPath))) await fsPromise.mkdir(dirPath, {recursive: true});
-      await fsPromise.chmod(dirPath, 7777);
-      await fsPromise.chown(dirPath, user.uid, user.gid);
-    }))
-    return new Promise<void>((done, reject) => {
-      unitProcess = childProcess.execFile({
-        command: replaceEnv(unit.process.command, unit.process.env),
-        args: unit.process.args.map(data => replaceEnv(data, unit.process.env)),
-        options: {
-          cwd: unit.process.cwd,
-          uid: user.uid,
-          gid: user.gid,
-          env: unit.process.env,
-          pipeProcess: SHOW_PROCESS_LOG === "verbose"?unit.name:undefined,
-        }
-      });
-      unitProcess.stdout.on("data", data => logStdout.write(data));
-      unitProcess.stderr.on("data", data => logStderr.write(data));
-      unitProcess.on("error", err => {clean("error", err); return reject(err);});
-      unitProcess.on("close", (code, signal) => {
-        if (unit.process.restart === "no") return clean();
-        else if (unit.process.restartCount && unit.process.restartCount > restartCount++) return clean();
-        else if (unit.process.restart === "always") return restartProcess();
-        else if (unit.process.restart === "on-error" && (code !== 0||signal !== null)) return restartProcess();
-        return clean("no-restart");
-      });
-      unitProcess.on("spawn", async () => {
-        if (unit.process.waitSeconds) await new Promise(done => setTimeout(done, unit.process.waitSeconds * 1000));
-        if (unit.postStartProcess) await postStart(unit, Array.isArray(unit.postStartProcess)?unit.postStartProcess:[unit.postStartProcess]);
-
-        // Childrens process
-        if (unit.dependecies) for (const dependecie of unit.dependecies) {
-          if (typeof dependecie !== "string") startProcess(dependecie).then(child => childs.push(child)).catch(err => console.log("[%s]: Cannot start '%s' depencie, error:\r%o", unit.name, dependecie.name, err));
-          else {
-            if (filePath === undefined) {console.log("[%s]: Ignoring load file to '%s'", unit.name, dependecie); continue;};
-            const realPath = path.resolve(filePath, dependecie);
-            if (!(realPath.endsWith(".json")||realPath.endsWith(".yml")||realPath.endsWith(".yaml"))) {console.log("[%s]: Ignoring load file to '%s'", unit.name, realPath); continue;};
-            await Promise.resolve().then(() => fsPromise.readFile(realPath, "utf8")).then(data => {
-              const childUnit: unitProcessV2 = realPath.endsWith(".json")?JSON.parse(data):yaml.parse(data);
-              return startProcess(childUnit, realPath);
-            }).catch(err => console.log("[%s]: Cannot load depencie, error:\n%o", unit.name, err));
-          }
-        }
-
-        return done();
-      });
+  await coreutils.customChildProcess.execFileAsync("useradd", [...argAdd, data.username.trim()]);
+  if (data.password) await coreutils.customChildProcess.execAsync(`(echo $PASSWORD; echo $PASSWORD) | passwd ${data.username}`, {env: {PASSWORD: data.password}});
+  if (data.ohmyzsh) {
+    await coreutils.customChildProcess.execFileAsync("bash", ["-c", `git clone https://github.com/ohmyzsh/ohmyzsh.git /home/${data.username}/.oh-my-zsh && git clone https://github.com/zsh-users/zsh-autosuggestions /home/${data.username}/.oh-my-zsh/custom/plugins/zsh-autosuggestions && cat /home/${data.username}/.oh-my-zsh/templates/zshrc.zsh-template | sed -e 's|ZSH_THEME=".*"|ZSH_THEME="strug"|g' | sed -e 's|plugins=(.*)|plugins=(git docker kubectl zsh-autosuggestions)|g' | tee /home/${data.username}/.zshrc`], {
+      uid: userid.uid(data.username),
+      gid: userid.gid(data.username),
+      cwd: `/home/${data.username}`
     });
-  };
+  }
 
-  async function stopProcess() {
-    let endChilds: stopReturn[];
-    if (childs && childs.length > 0) endChilds = await Promise.all(childs.map(child => child.stopProcess()));
-    if (unitProcess.killed && unitProcess.exitCode !== null) unitProcess = undefined;
-    else {
-      unitProcess.kill("SIGSTOP");
-      await new Promise<void>((done, reject) => {
-        unitProcess.once("error", reject);
-        unitProcess.once("close", done);
-        setTimeout(() => {
-          console.log(unitProcess.exitCode, unitProcess.signalCode);
-          if (unitProcess.exitCode === null) unitProcess.kill("SIGKILL")
-        }, unit.process.waitKill||1000*60*2);
-      });
+  console.log("Success create '%s'\n\tHome dir: '/home/%s'", data.username, data.username);
+  return data;
+}).command("process", "Maneger process in initjs daemon", async yargs => {
+  return yargs.demandCommand().options("socketpath", {
+    type: "string",
+    description: "Informe a onde o socket está, por padrão ele procura automaticamente",
+    default: await findSocket(),
+  }).option("host", {
+    type: "string",
+    description: "url to request if",
+    default: "http://localhost:9448"
+  }).command("ps", "list process status in initjs", async yargs => {
+    const options = yargs.option("process", {
+      type: "string",
+      description: "Show info to single process",
+    }).parseSync();
+    const data: apiProcessList = await coreutils.httpRequest.getJSON({socket: {socketPath: options.socketpath}}).catch(() => coreutils.httpRequest.getJSON(options.host));
+    function createData(config: apiProcessList[string]) {
+      let data = `Name: '${config.name}'\n\tStatus: ${config.status}\n\tRestarts: ${config.restartCount}`;
+      if (config.pid) data += `\r\tPID: ${config.pid}`;
+      if (config.childrens) data += `\n\tChildrens: ${config.childrens.join(", ")}`
+      return data;
     }
-    const code = unitProcess.exitCode||unitProcess.signalCode;
-    await clean("no-restart");
-    logStderr.close();
-    logStdout.close();
-    return {code, name: unit.name, endChilds};
-  }
-
-  let restartCount = 0;
-  async function restartProcess() {
-    await clean("restart");
-    if (unitProcess?.killed||unitProcess?.exitCode !== null) unitProcess = undefined;
-    else await stopProcess().then(() => unitProcess = undefined);
-    if (unit.onRestart) await postStart(unit, Array.isArray(unit.onRestart)?unit.onRestart:[unit.onRestart]);
-    return startMainProcess();
-  }
-
-  await startMainProcess();
-  const returnData: processReturn = {
-    name: unit.name,
-    getPid: () => unitProcess?.pid,
-    restartProcess,
-    stopProcess,
-    childs
-  };
-
-  globalProcess[unit.name] = returnData;
-  return returnData;
-}
-
-export const filesToInitjs = /\.((c|m|)js|json|y[a]ml)$/;
-async function loadDinits() {
-  const folderDinit = [
-    path.resolve(__dirname, "../initjs"),
-  ];
-  if (await extendsFs.exists("/etc/initjs")) folderDinit.push("/etc/initjs");
-  if (await extendsFs.exists(path.join(process.cwd(), ".initjs"))) folderDinit.push(path.join(process.cwd(), ".initjs"));
-  const files = (await extendsFs.readdirrecursive(folderDinit)).filter(file => filesToInitjs.test(file));
-  const procs = {};
-  await Promise.all(files.map(async file => {
-    if (file.endsWith(".yml")||file.endsWith(".yaml")) {
-      const yamlData: unitProcessV2 = yaml.parse(await fsPromise.readFile(file, "utf8"));
-      procs[yamlData.name] = yamlData;
-    } else if (file.endsWith(".json")) {
-      const procConfig: unitProcessV2 = JSON.parse(await fsPromise.readFile(file, "utf8"));
-      procs[procConfig.name] = procConfig;
-    } else console.info("JS hasn't been implemented yet!");
-  }));
-  // console.log(procs);
-  return Promise.all(Object.keys(procs).map(key => startProcess(procs[key])));
-}
-
-// Listen socket
-export const socketListen = path.join(userInfo().username !== "root"?tmpdir():"/var/run", "initjs.sock");
-export const app = express();
-Promise.resolve().then(async () => (await exists(socketListen))?fs.promises.rm(socketListen, {force: true}):Promise.resolve()).then(() => loadDinits().then(() => app.listen(socketListen, () => console.log("[Initjs]: All process started and sock listen on '%s'", socketListen))));
-app.use(express.json());
-app.use(express.urlencoded({extended: true}));
-app.use((_req, res, next): void => {
-  res.json = (body) => res.setHeader("Content-Type", "application/json").send(JSON.stringify(body, null, 2));
-  return next();
+    if (options.process) {
+      const processData = Object.keys(data).map(name => data[name]).find(process => process.name === options.process);
+      if (!processData) throw new Error("Process not exists");
+      console.log(createData(processData));
+    } else {
+      const data2 = Object.keys(data).map(name => data[name]).map(config => createData(config));
+      console.log("----------------------\n%s\n----------------------", data2.join("\n----------------------\n"));
+    }
+    return options;
+  }).parseAsync();
+}).parseAsync().catch(err => {
+  if (err?.response?.body) console.error(Buffer.isBuffer(err.response.body)?err.response.body.toString("utf8"):err.response.body);
+  else console.error(err?.message||err);
+  process.exit(1);
 });
-
-// Listen process
-app.get("/", ({res}) => res.status(200).json(Object.getOwnPropertyNames(globalProcess).reduce((a, b) => {
-  const processChild = globalProcess[b];
-  a[b] = {
-    pid: processChild.getPid(),
-  };
-  return a;
-}, {})));
-
-// Register new process
-app.post("/", (req, res) => startProcess(req.body).then(unitData => res.status(200).json(unitData)).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {}))));
-
-// Delete process
-app.delete("/", (req, res) => {
-  const processName: string = req.body?.name;
-  if (!globalProcess[processName]) return res.status(400).json({error: "Process not started"});
-  return globalProcess[processName].stopProcess().then(status => res.status(200).json({status})).catch(err => res.status(400).json(Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})));
-});
-
-// Restart process
-app.put("/restart", async (req, res) => {
-  const processName: string = req.body?.name;
-  if (!globalProcess[processName]) return res.status(400).json({error: "Process not started"});
-  await globalProcess[processName].restartProcess();
-  return res.json({
-    pid: globalProcess[processName].getPid(),
-  });
-});
-
-// catch error
-app.use((err: Error, _req, res, _next) => res.status(500).json({
-  error: "Backend get error",
-  full: Object.getOwnPropertyNames(err).reduce((a, b) => {a[b] = err[b]; return a;}, {})
-}));

@@ -8,9 +8,9 @@
     "build": "tsc"
   },
   "bin": {
-    "initjsd": "./src/index.js",
-    "initjs": "./src/cli.js",
-    "initd": "./src/index.js"
+    "initjs": "./src/index.js",
+    "initjsd": "./src/backgroud.js",
+    "initd": "./src/backgroud.js"
   },
   "repository": {
     "type": "git",
@@ -34,6 +34,7 @@
     "typescript": "^4.8.4"
   },
   "dependencies": {
+    "@the-bds-maneger/core-utils": "^1.0.0",
     "express": "^5.0.0-beta.1",
     "got": "^12.5.2",
     "userid": "^1.2.5",

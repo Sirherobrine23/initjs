@@ -5,17 +5,19 @@ process:
   waitSeconds: 15
   command: dockerd
   args:
-    - "--experimental"
+  - "--experimental"
   if_no_file:
-    - "/var/run/docker.sock"
+  - "/var/run/docker.sock"
+  platforms:
+  - linux
 
-dependecies:
+childres:
   - name: Minikube
     process:
       restart: on-error
       restartCount: 6
       command: minikube
       args:
-        - "start"
-        - "--driver=docker"
-        - "--force"
+      - "start"
+      - "--driver=docker"
+      - "--force"
