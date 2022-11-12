@@ -27,14 +27,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
+      - name: Build core image
         uses: docker/build-push-action@v3
         with:
           cache-from: type=gha,scope=sirherobrine23_docker
           cache-to: type=gha,scope=sirherobrine23_docker
           platforms: "linux/amd64,linux/arm64"
           context: ./
+          target: core
+          push: true
+          tags: ghcr.io/sirherobrine23/initjs_core:latest
+
+      - name: Build full image
+        uses: docker/build-push-action@v3
+        with:
+          cache-from: type=gha,scope=sirherobrine23_docker
+          cache-to: type=gha,scope=sirherobrine23_docker
+          platforms: "linux/amd64,linux/arm64"
+          context: ./
+          target: full
           push: true
           tags: |
-            ghcr.io/sirherobrine23/mydockerimage:latest
             ghcr.io/sirherobrine23/initjs:latest
+            ghcr.io/sirherobrine23/initjs_full:latest

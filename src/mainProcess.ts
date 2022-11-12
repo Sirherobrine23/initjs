@@ -4,6 +4,7 @@ import { createInterface as readlineCreateInterface } from "node:readline";
 import https from "node:https";
 import path from "node:path";
 import fs from "node:fs/promises";
+import yaml from "yaml";
 import userid from "userid";
 import express from "express";
 import child_process from "node:child_process";
@@ -73,44 +74,26 @@ export declare interface mainProcess {
   once(act: "spawn", fn: (data: {name: string}) => void): this;
 };
 
+export type mainProcessOptions = {
+  socketPath: string|{path: string, owner?: string, callback?: () => void},
+  httpPort?: number|{port: number, callback?: () => void, https?: {cert: string, key: string}},
+  initjsFolder?: string[]
+}
+
+export type processList = {[name: string]: initjs_process};
+
+export type apiProcessList = {
+  [name: string]: initjs_process & {
+    childProcess: undefined,
+    pid?: number
+  }
+};
+
 /**
  * Create process listen socket and http(s) server to maneger remotely process maneger
 */
 export class mainProcess extends EventEmitter {
-  processList: {[name: string]: initjs_process} = {};
-  constructor(socketPath: string|{path: string, owner?: string, callback?: () => void}, httpPort?: number|{port: number, callback?: () => void, https?: {cert: string, key: string}}) {
-    super(); const app = express();
-    app.use(express.json(), express.urlencoded({extended: true}));
-    app.get("/", ({res}) => res.json(Object.keys(this.processList).reduce((mount, id) => {
-      const data = this.processList[id];
-      mount[id] = {
-        ...data,
-        childProcess: undefined,
-      };
-      return mount;
-    }, {})));
-    app.post("/", (req, res) => this.registerProcess(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
-    app.put("/", (req, res) => this.updateConfig(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
-    app.delete("/", (req, res) => this.deleteProcess(req.body?.name).then(() => res.json({ok: true})).catch(err => res.status(400).json({err: err?.message||err})));
-
-    coreUtils.extendFs.exists(typeof socketPath === "string"?socketPath:socketPath.path).then(async exist => {
-      if (exist) await fs.rm(typeof socketPath === "string"?socketPath:socketPath.path);
-      app.listen(typeof socketPath === "string"?socketPath:socketPath.path, async () => {
-        if (typeof socketPath === "string") return;
-        if (socketPath.callback) socketPath.callback();
-      });
-    });
-    if (httpPort) {
-      if (typeof httpPort === "number") app.listen(httpPort);
-      else {
-        if (httpPort.port === undefined) httpPort.port = 0;
-        const httpCallback = () => {if (httpPort.callback) httpPort.callback();};
-        if (!httpPort.https) app.listen(httpPort.port, httpCallback)
-        else https.createServer({cert: httpPort.https.cert, key: httpPort.https.key}, app).listen(httpPort.port, httpCallback);
-      }
-    };
-  }
-
+  processList: processList = {};
   async deleteProcess(name: string) {
     if (!name) throw new Error("name is blank");
     if (!Object.keys(this.processList).includes(name)) throw new Error("Process not exists");
@@ -203,6 +186,7 @@ export class mainProcess extends EventEmitter {
     local_ChildProcess.on("close", async (code, signal) => {
       this.emit("processExit", {name: config.name, code, signal});
       this.processList[config.name].status = "stoped";
+      this.processList[config.name].childProcess = undefined;
       stdoutLine.close();
       stderrLine.close();
       if (!this.processList[config.name].lockToUpdate) {
@@ -224,8 +208,53 @@ export class mainProcess extends EventEmitter {
     }
 
     // Process after start process
-    if (config.childres) await Promise.all(config.childres.map(config => this.registerProcess(config).catch(err => this.emit("error", err))));
+    if (config.childres && !isRestart) await Promise.all(config.childres.map(config => this.registerProcess(config).catch(err => this.emit("error", err))));
 
     return this.processList[config.name];
+  }
+
+  constructor(options: mainProcessOptions) {
+    const { socketPath, httpPort } = options;
+    super(); const app = express();
+    app.use(express.json(), express.urlencoded({extended: true}));
+    app.post("/", (req, res) => this.registerProcess(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
+    app.put("/", (req, res) => this.updateConfig(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
+    app.delete("/", (req, res) => this.deleteProcess(req.body?.name).then(() => res.json({ok: true})).catch(err => res.status(400).json({err: err?.message||err})));
+    app.get("/", ({res}) => res.json(Object.keys(this.processList).reduce((mount, id) => {
+      const data = this.processList[id];
+      mount[id] = {
+        ...data,
+        childProcess: undefined,
+        pid: data?.childProcess?.pid
+      };
+      return mount;
+    }, {} as apiProcessList)));
+
+    coreUtils.extendFs.exists(typeof socketPath === "string"?socketPath:socketPath.path).then(async exist => {
+      if (exist) await fs.rm(typeof socketPath === "string"?socketPath:socketPath.path);
+      app.listen(typeof socketPath === "string"?socketPath:socketPath.path, async () => {
+        if (typeof socketPath === "string") return;
+        if (socketPath.callback) socketPath.callback();
+      });
+    });
+    if (httpPort) {
+      if (typeof httpPort === "number") app.listen(httpPort);
+      else {
+        if (httpPort.port === undefined) httpPort.port = 0;
+        const httpCallback = () => {if (httpPort.callback) httpPort.callback();};
+        if (!httpPort.https) app.listen(httpPort.port, httpCallback)
+        else https.createServer({cert: httpPort.https.cert, key: httpPort.https.key}, app).listen(httpPort.port, httpCallback);
+      }
+    };
+
+    // Load init files
+    if (options.initjsFolder?.length > 0) {
+      Promise.all(options.initjsFolder.map(async folderPath => {
+        const initfolder = path.join(process.cwd(), folderPath);
+        if (!await coreUtils.extendFs.exists(initfolder)) return null;
+        const files = (await coreUtils.extendFs.readdirrecursive(initfolder)).filter(file => /\.(json|y[a]ml)$/.test(file as string)) as string[];
+        return Promise.all(files.map(async file => fs.readFile(file, "utf8").then(data => file.endsWith(".json")?JSON.parse(data):yaml.parse(data)).then(config => this.registerProcess(config)))).catch(err => this.emit("error", err));
+      })).catch(err => this.emit("error", err));;
+    }
   }
 }
