@@ -70,7 +70,7 @@ RUN apt update && apt install -y php && echo "php /usr/share/composer/composer.p
 RUN apt update && apt list | grep -E 'openjdk-[0-9\.]+-(jre|jdk)' | grep -v -E 'headless|zero' | cut -d / -f 1 | xargs apt install -y
 
 # Install rust
-ENV RUSTUP_HOME="/opt/rust" CARGO_HOME="/opt/rust"
+ENV RUSTUP_HOME="/usr" CARGO_HOME="/usr"
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --no-modify-path
 
 # Go (golang)
