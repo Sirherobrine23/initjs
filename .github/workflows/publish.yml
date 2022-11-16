@@ -36,7 +36,8 @@ jobs:
           context: ./
           target: core
           push: true
-          tags: ghcr.io/sirherobrine23/initjs_core:latest
+          tags: |
+            ghcr.io/sirherobrine23/initjs:core
 
       - name: Build full image
         uses: docker/build-push-action@v3
@@ -48,5 +49,6 @@ jobs:
           target: full
           push: true
           tags: |
+            ghcr.io/sirherobrine23/mydockerimage:latest
             ghcr.io/sirherobrine23/initjs:latest
-            ghcr.io/sirherobrine23/initjs_full:latest
+            ghcr.io/sirherobrine23/initjs:full
