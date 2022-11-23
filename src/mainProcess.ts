@@ -250,8 +250,8 @@ export class mainProcess extends EventEmitter {
     // Load init files
     if (options.initjsFolder?.length > 0) {
       Promise.all(options.initjsFolder.map(async folderPath => {
-        const initfolder = path.join(process.cwd(), folderPath);
-        if (!await coreUtils.extendFs.exists(initfolder)) return null;
+        const initfolder = path.resolve(process.cwd(), folderPath);
+        if (!await coreUtils.extendFs.exists(initfolder)) return console.log("folder (\"%s\") not exists", initfolder);
         const files = (await coreUtils.extendFs.readdirrecursive(initfolder)).filter(file => /\.(json|y[a]ml)$/.test(file as string)) as string[];
         return Promise.all(files.map(async file => fs.readFile(file, "utf8").then(data => file.endsWith(".json")?JSON.parse(data):yaml.parse(data)).then(config => this.registerProcess(config)))).catch(err => this.emit("error", err));
       })).catch(err => this.emit("error", err));;

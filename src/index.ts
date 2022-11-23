@@ -18,7 +18,7 @@ async function findSocket() {
   else return home;
 }
 
-Yargs(process.argv.slice(2)).wrap(Yargs.terminalWidth()).version(false).help().alias("h", "help").demandCommand().command("start", "run initjs in background to maneger process, listen socket and http server", async yargs => {
+Yargs(process.argv.slice(2)).wrap(Yargs.terminalWidth()).version(false).help().alias("h", "help").demandCommand().strictCommands().command("start", "run initjs in background to maneger process, listen socket and http server", async yargs => {
   const options = yargs.option("socket-path", {
     type: "string",
     description: "Caminho para criar um socket unix para poder se comunicar com initjs",
