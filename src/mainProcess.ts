@@ -216,7 +216,7 @@ export class mainProcess extends EventEmitter {
   constructor(options: mainProcessOptions) {
     const { socketPath, httpPort } = options;
     super(); const app = express();
-    app.use(express.json(), express.urlencoded({extended: true}));
+    app.use(express.json()).use(express.urlencoded({extended: true}));
     app.post("/", (req, res) => this.registerProcess(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
     app.put("/", (req, res) => this.updateConfig(req.body).then(data => res.json({...data, childProcess: undefined,})).catch(err => res.status(400).json({err: err?.message||err})));
     app.delete("/", (req, res) => this.deleteProcess(req.body?.name).then(() => res.json({ok: true})).catch(err => res.status(400).json({err: err?.message||err})));
@@ -243,7 +243,7 @@ export class mainProcess extends EventEmitter {
         if (httpPort.port === undefined) httpPort.port = 0;
         const httpCallback = () => {if (httpPort.callback) httpPort.callback();};
         if (!httpPort.https) app.listen(httpPort.port, httpCallback)
-        else https.createServer({cert: httpPort.https.cert, key: httpPort.https.key}, app).listen(httpPort.port, httpCallback);
+        else https.createServer({cert: httpPort.https.cert, key: httpPort.https.key}, app as any).listen(httpPort.port, httpCallback);
       }
     };
 

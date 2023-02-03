@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import Yargs from "yargs";
 import userid from "userid";
 process.title = "initjs";
+
 async function findSocket() {
   const tmp = path.join(os.tmpdir(), "initjs.sock"), dottmp = path.join(os.tmpdir(), ".initjs.sock"), home = path.join(os.homedir(), "initjs.sock"), dothome = path.join(os.homedir(), ".initjs.sock");
   if (await coreutils.extendFs.exists(tmp)) return tmp;
