@@ -1,17 +1,17 @@
 {
   "name": "initjs",
+  "private": true,
   "version": "0.1.0",
-  "description": "A custom init to My container docker image",
+  "description": "A custom init to container docker image",
   "main": "src/index.js",
-  "type": "commonjs",
+  "type": "module",
+  "author": "Matheus Sampaio Queiroga <srherobrine20@gmail.com> (https://sirherobrine23.org)",
+  "license": "MIT",
+  "homepage": "https://github.com/Sirherobrine23/My-docker-image-to-develop#readme",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc --build"
   },
-  "bin": {
-    "initjs": "./src/index.js",
-    "initjsd": "./src/backgroud.js",
-    "initd": "./src/backgroud.js"
-  },
+  "bin": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Sirherobrine23/My-docker-image-to-develop.git"
@@ -20,25 +20,17 @@
     "init",
     "Docker"
   ],
-  "author": "Matheus Sampaio Queiroga <srherobrine20@gmail.com> (https://sirherobrine23.org)",
-  "license": "MIT",
   "bugs": {
     "url": "https://github.com/Sirherobrine23/My-docker-image-to-develop/issues"
   },
-  "homepage": "https://github.com/Sirherobrine23/My-docker-image-to-develop#readme",
+  "dependencies": {
+    "express": "^4.18.2",
+    "yaml": "^2.2.1"
+  },
   "devDependencies": {
-    "@types/express": "^4.17.16",
-    "@types/node": "^18.11.18",
-    "@types/yargs": "^17.0.22",
+    "@types/express": "^4.17.17",
+    "@types/node": "^18.14.6",
     "ts-node": "^10.9.1",
     "typescript": "^4.9.5"
-  },
-  "dependencies": {
-    "@the-bds-maneger/core-utils": "^1.1.1",
-    "express": "^4.18.2",
-    "got": "^12.5.3",
-    "userid": "^1.2.5",
-    "yaml": "^2.2.1",
-    "yargs": "^17.6.2"
   }
 }
